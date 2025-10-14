@@ -1,0 +1,2124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<title>Windweb desktop</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Segoe+UI&display=swap');
+
+  :root {
+      --text-light: #f0f0f0;
+      --text-dark: #222;
+      --cursor-default: default; /* デフォルトカーソル変数 */
+  }
+  
+  /* カーソル設定 */
+  html,body { 
+      cursor: var(--cursor-default); 
+  }
+  
+  * { box-sizing: border-box; }
+  html,body { height:100%; margin:0; padding:0; font-family:'Segoe UI',Tahoma,Arial,sans-serif; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; user-select:none; background:#0078d7; transition: background-color 200ms linear; color: var(--text-dark); }
+
+  /* Desktop */
+  #desktop {
+    position:relative;
+    width:100vw; height:100vh;
+    overflow:hidden;
+    background-size:cover;
+    background-position:center;
+  }
+
+  /* Glass effect */
+  .glass {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius:8px;
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    transition: background-color 200ms linear, border-color 200ms linear;
+  }
+
+  /* Desktop icons */
+  .desktop-icon {
+    position:absolute;
+    width:92px; height:92px;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    gap:6px; padding-top:6px;
+    color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+    cursor:pointer !important; /* カーソルをデフォルトの pointer に上書き */
+    user-select:none;
+  }
+  .desktop-icon.dragging { cursor:grabbing !important; opacity:0.85; transform:scale(1.02); z-index:4000; }
+  .desktop-icon img { width:48px; height:48px; pointer-events:none; }
+  .desktop-icon span { font-size:13px; text-align:center; width:88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* Taskbar */
+  #taskbar {
+    position:absolute; left:0; right:0; bottom:0; height:44px;
+    display:flex; align-items:center; gap:8px; padding:6px;
+    box-shadow: 0 -2px 18px rgba(0,0,0,0.35);
+  }
+  #taskbar.glass { padding:6px 12px; }
+
+  #start-button { width:48px; height:32px; border-radius:6px; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; background:transparent; }
+  #start-button svg { width:20px; height:20px; fill:white; }
+
+  #task-buttons { display:flex; gap:6px; align-items:center; overflow-x:auto; flex:1; }
+  .task-button { background: rgba(0,0,0,0.35); color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:600; white-space:nowrap; }
+  .task-button.active { background:#0078d7; }
+
+  #taskbar-clock { width:110px; text-align:right; color:white; font-weight:600; }
+
+  /* Start menu */
+  #start-menu {
+    position:absolute; bottom:56px; left:8px; width:320px; display:none; flex-direction:column; gap:6px; padding:12px;
+  }
+  #start-menu.active { display:flex; }
+  #start-menu-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 6px; }
+  #start-menu-user-icon { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.2); object-fit: cover; }
+  #start-menu-username { color: white; font-weight: bold; }
+  #start-menu .app-launch { display:flex; gap:10px; align-items:center; padding:10px; border-radius:8px; border:none; background:transparent; color:white; font-weight:700; cursor:pointer; width: 100%; text-align: left;}
+  #start-menu .app-launch:hover { background: rgba(255,255,255,0.1); }
+
+  /* Window */
+  .window {
+    position:absolute; min-width:320px; min-height:200px; resize:both; overflow:hidden; display:flex; flex-direction:column;
+    border-radius:10px; border:1px solid rgba(0,0,0,0.25); background:linear-gradient(180deg, rgba(255,255,255,0.85), rgba(250,250,250,0.95));
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    user-select:text;
+    transition: background 200ms linear, color 200ms linear;
+  }
+  .titlebar {
+    height:42px; display:flex; align-items:center; gap:8px; padding:0 12px; cursor:move; user-select:none;
+    background:linear-gradient(180deg, rgba(0,120,215,0.95), rgba(0,90,170,0.95)); color:white;
+    border-top-left-radius:10px; border-top-right-radius:10px;
+    transition: background 200ms linear;
+  }
+  .titlebar .title { font-weight:800; font-size:15px; flex:1; }
+  .titlebar button { width:36px; height:32px; border-radius:6px; border:none; cursor:pointer; background:transparent; color:white; font-weight:700; }
+  .titlebar button:hover { background: rgba(255,255,255,0.08); }
+
+  .content { padding:12px; flex:1; overflow:auto; background:transparent; color: var(--text-dark); transition: color 200ms linear; }
+  textarea { width:100%; height:100%; border:none; outline:none; resize:none; font-family:Consolas,monospace; font-size:14px; background:transparent; color:inherit; }
+
+  /* context menu */
+  #context-menu {
+    position:absolute; display:none; min-width:220px; z-index:2000; flex-direction:column; padding:6px; gap:6px;
+  }
+  #context-menu button { background:transparent; border:none; padding:10px; border-radius:6px; cursor:pointer; text-align:left; color: var(--text-dark); }
+  #context-menu button:hover { background:rgba(0,0,0,0.06); }
+
+  /* signon */
+  #signon-overlay {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; background:linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.45));
+  }
+  #signon-card { width:380px; padding:22px; border-radius:12px; text-align:center; color:white; }
+  #signon-card select, #signon-card input { width:100%; padding:10px; margin:10px 0; border-radius:8px; border:1px solid #ccc; font-size:15px; }
+  #signon-card button { flex:1;padding:10px;border-radius:8px;border:none;cursor:pointer; }
+  #signon-card .button-group { display:flex; gap:8px; margin-top:8px; }
+
+  /* Minimized state */
+  .window.minimized { display:none !important; }
+
+  /* Fade-in animation */
+  @keyframes winFade {
+    from { opacity:0; transform: translateY(6px) scale(0.995); }
+    to   { opacity:1; transform: translateY(0) scale(1); }
+  }
+  .window.fade-in { animation: winFade 180ms cubic-bezier(.2,.8,.2,1); }
+
+  /* Responsive */
+  @media (max-width:600px){
+    .desktop-icon { width:72px; height:72px; }
+    .window { min-width:260px; min-height:160px; }
+    #start-menu { width:240px; }
+  }
+
+  /* playlist */
+  .playlist { max-height:160px; overflow:auto; border:1px dashed rgba(0,0,0,0.08); padding:8px; border-radius:6px; background:rgba(255,255,255,0.02); }
+  .playlist .item { padding:6px; cursor:pointer; border-radius:6px; }
+  .playlist .item:hover { background:rgba(255,255,255,0.04); }
+
+  .muted { color: rgba(0,0,0,0.6); font-size:13px; }
+  .settings-section { margin-bottom: 20px; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; }
+  .settings-section h4 { margin-top: 0; margin-bottom: 12px; }
+  .settings-section hr { border: none; height: 1px; background-color: rgba(0,0,0,0.1); margin: 12px 0; }
+  .settings-section input[type="file"] { margin: 8px 0; }
+  .settings-section input[type="text"] { width: 100%; margin: 8px 0; }
+
+  /* --- Dark Mode --- */
+  body.dark-mode { background: #1e1e1e; color: var(--text-light); }
+  body.dark-mode .glass { background: rgba(30, 30, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); }
+  body.dark-mode .desktop-icon { color: var(--text-light); text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+  body.dark-mode .task-button { background: rgba(255,255,255,0.1); }
+  body.dark-mode .task-button.active { background: #0078d7; }
+  body.dark-mode #taskbar-clock, body.dark-mode #start-menu-username { color: var(--text-light); }
+  body.dark-mode #start-menu .app-launch { color: var(--text-light); }
+  
+  body.dark-mode .window { background: linear-gradient(180deg, #3a3a3a, #2c2c2c); border-color: rgba(255,255,255,0.15); }
+  body.dark-mode .window.glass { background: rgba(40,40,40,0.7); }
+  body.dark-mode .titlebar { background: linear-gradient(180deg, #4a4a4a, #383838); }
+  body.dark-mode .content { color: var(--text-light); }
+
+  body.dark-mode #context-menu button { color: var(--text-light); }
+  body.dark-mode #context-menu button:hover { background: rgba(255,255,255,0.1); }
+  
+  body.dark-mode .settings-section { border-color: rgba(255,255,255,0.2); }
+  body.dark-mode .settings-section hr { background-color: rgba(255,255,255,0.1); }
+  body.dark-mode .muted { color: rgba(255,255,255,0.5); }
+  body.dark-mode button, body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
+      background-color: #333;
+      color: var(--text-light);
+      border: 1px solid #555;
+  }
+  body.dark-mode button.glass, body.dark-mode input.glass, body.dark-mode select.glass {
+      background: rgba(30, 30, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  body.dark-mode .settings-section button, body.dark-mode .titlebar button, body.dark-mode #start-button, body.dark-mode .task-button {
+      background: transparent; border: none; color: white;
+  }
+  body.dark-mode .task-button { background: rgba(255,255,255,0.1); }
+  body.dark-mode .task-button.active { background: #0078d7; }
+  body.dark-mode .settings-section input[type="file"]::file-selector-button {
+      background: #555; color: var(--text-light); border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;
+  }
+  body.dark-mode .settings-section input[type="range"] { background: transparent; border: none; }
+</style>
+</head>
+<body>
+  <div id="signon-overlay" aria-hidden="true">
+    <div id="signon-card" class="glass">
+      <h2 style="margin:6px 0 4px;">ようこそ</h2>
+      <div style="color:#e8eef9;margin-bottom:8px;">ユーザーを選択または新規作成してください</div>
+      
+      <select id="user-select"></select>
+      
+      <div class="button-group">
+        <button id="signon-btn" class="glass">サインイン</button>
+        <button id="delete-user-btn" class="glass" style="background-color:rgba(220,53,69,0.5);">削除</button>
+      </div>
+      
+      <input id="new-username-input" placeholder="新しいユーザー名" autocomplete="off" />
+      <div class="button-group">
+        <button id="create-user-btn" class="glass">新規ユーザー作成</button>
+      </div>
+
+      <div style="margin-top:10px;color:#cfe0ff;font-size:12px;">※ ユーザー情報は localStorage に保存されます</div>
+      <div class="button-group" style="margin-top:20px;">
+        <button id="backup-btn" class="glass" style="background-color:rgba(53,220,69,0.5);">バックアップ</button>
+        <button id="load-backup-btn" class="glass" style="background-color:rgba(53,69,220,0.5);">ロード</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="desktop" tabindex="0" aria-label="デスクトップ"></div>
+
+  <div id="taskbar" class="glass" role="contentinfo" aria-label="タスクバー">
+    <button id="start-button" aria-haspopup="true" aria-expanded="false" aria-label="スタートメニュー">
+      <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zm-10 10h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
+    </button>
+    <div id="task-buttons" role="tablist" aria-label="タスクボタン"></div>
+    <div id="taskbar-clock" aria-live="polite" aria-atomic="true" role="timer"></div>
+  </div>
+
+  <nav id="start-menu" role="menu" aria-label="スタートメニュー" class="glass" aria-hidden="true">
+    <div id="start-menu-header">
+      <img id="start-menu-user-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ffffff' d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E" alt="User Icon"/>
+      <span id="start-menu-username">User</span>
+    </div>
+    <button class="app-launch" data-app="explorer" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/281/281769.png" alt="" width="22" height="22"/>
+      エクスプローラー
+    </button>
+    <button class="app-launch" data-app="notepad" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/136/136538.png" alt="" width="22" height="22"/>
+      メモ帳
+    </button>
+    <button class="app-launch" data-app="browser" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/732/732221.png" alt="" width="22" height="22"/>
+      ウェブブラウザ
+    </button>
+    <button class="app-launch" data-app="cmd" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/385/385966.png" alt="" width="22" height="22"/>
+      コマンドプロンプト
+    </button>
+    <button class="app-launch" data-app="musicplayer" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/727/727240.png" alt="" width="22" height="22"/>
+      ミュージックプレイヤー
+    </button>
+    <button class="app-launch" data-app="clock" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/1034/1034159.png" alt="" width="22" height="22"/>
+      時計
+    </button>
+    <button class="app-launch" data-app="calendar" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/3652/3652191.png" alt="" width="22" height="22"/>
+      カレンダー
+    </button>
+    <button class="app-launch" data-app="tetris" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/1004/1004732.png" alt="" width="22" height="22"/>
+      テトリス
+    </button>
+    <button class="app-launch" data-app="settings" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/3524/3524659.png" alt="" width="22" height="22"/>
+      設定
+    </button>
+
+    <hr style="border:none;height:1px;background:rgba(255,255,255,0.06);margin:8px 0;">
+    <label style="color:white;font-weight:700;">アップロード</label>
+    <div style="display:flex;gap:8px;">
+      <input id="file-upload-input" type="file" style="display:none" />
+      <button id="upload-btn" class="glass" style="padding:8px;border-radius:8px;border:none;cursor:pointer;">ファイルを追加</button>
+      <button id="upload-html-btn" class="glass" style="padding:8px;border-radius:8px;border:none;cursor:pointer;">HTML実行用追加</button>
+    </div>
+  </nav>
+
+  <div id="context-menu" class="glass" role="menu" aria-hidden="true">
+    <button id="change-wallpaper-btn">壁紙を変更</button>
+    <button id="upload-wallpaper-btn">壁紙をアップロード</button>
+    <button id="create-file-btn">ファイルを作成</button>
+    <div id="context-sub" style="display:none;flex-direction:column;margin-top:6px;"></div>
+  </div>
+
+  <input id="wallpaper-upload-input" type="file" accept="image/*" style="display:none" />
+  <input id="backup-file-input" type="file" accept="application/json" style="display:none" />
+  <input id="cursor-upload-input" type="file" accept="image/*,.cur,.ani" style="display:none" />
+
+
+<script>
+(() => {
+  const BUILD_VERSION = "2.0.0"; // ビルドバージョンを更新
+
+  /* ---------- LocalStorage Management ---------- */
+  function saveState() {
+    // 巨大なバイナリデータ（Data URLの壁紙やアイコン）をlocalStorageから除外して保存する
+    try { 
+        const stateToSave = JSON.parse(JSON.stringify(state));
+        // カーソルデータはテーマ設定に含まれているため、ここでは除外しない
+        
+        // desktopFilesのcontent/dataUrlはそのまま保存する（小さなファイルのみを想定しているため）
+        
+        localStorage.setItem('windweb_state', JSON.stringify(stateToSave)); 
+    }
+    catch (e) { console.warn('saveState fail', e); }
+  }
+  function loadState() {
+    try { const s = localStorage.getItem('windweb_state'); if(!s) return null; return JSON.parse(s); }
+    catch(e){ return null; }
+  }
+  
+  // JSONをファイルとしてダウンロードさせる
+  function downloadJson(data, filename) {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  
+  /* ---------- DOM Elements ---------- */
+  const desktop = document.getElementById('desktop');
+  const startButton = document.getElementById('start-button');
+  const startMenu = document.getElementById('start-menu');
+  const startMenuUserIcon = document.getElementById('start-menu-user-icon');
+  const startMenuUsername = document.getElementById('start-menu-username');
+  const taskButtonsContainer = document.getElementById('task-buttons');
+  const taskbarClock = document.getElementById('taskbar-clock');
+  const contextMenu = document.getElementById('context-menu');
+  const wallpaperUploadInput = document.getElementById('wallpaper-upload-input');
+  const fileUploadInput = document.getElementById('file-upload-input');
+  const uploadBtn = document.getElementById('upload-btn');
+  const uploadHtmlBtn = document.getElementById('upload-html-btn');
+  const changeWallpaperBtn = document.getElementById('change-wallpaper-btn');
+  const uploadWallpaperBtn = document.getElementById('upload-wallpaper-btn');
+  const createFileBtn = document.getElementById('create-file-btn');
+  const backupBtn = document.getElementById('backup-btn');
+  const loadBackupBtn = document.getElementById('load-backup-btn');
+  const backupFileInput = document.getElementById('backup-file-input');
+
+  // Sign-on Elements
+  const signonOverlay = document.getElementById('signon-overlay');
+  const userSelect = document.getElementById('user-select');
+  const signonBtn = document.getElementById('signon-btn');
+  const newUsernameInput = document.getElementById('new-username-input');
+  const createUserBtn = document.getElementById('create-user-btn');
+  const deleteUserBtn = document.getElementById('delete-user-btn');
+
+  /* ---------- State Management ---------- */
+  let windows = {}; // id -> {id,name,element,minimized,prevRect,isMaximized,title,file}
+  let zIndexCounter = 100;
+  let focusedWindowId = null;
+
+  const defaultUserFiles = [
+      { id: 'app_explorer', name: 'エクスプローラー', type:'app', app:'explorer', pos:null },
+      { id: 'app_browser', name: 'ウェブブラウザ', type:'app', app:'browser', pos:null },
+      { id: 'app_notepad', name: 'メモ帳', type:'app', app:'notepad', pos:null },
+      { id: 'app_music', name: 'ミュージックプレイヤー', type:'app', app:'musicplayer', pos:null },
+      { id: 'app_cmd', name: 'コマンドプロンプト', type:'app', app:'cmd', pos:null },
+      { id: 'app_clock', name: '時計', type:'app', app:'clock', pos:null },
+      { id: 'app_calendar', name: 'カレンダー', type:'app', app:'calendar', pos:null },
+      { id: 'app_tetris', name: 'テトリス', type:'app', app:'tetris', pos:null },
+      { id: 'app_settings', name: '設定', type:'app', app:'settings', pos:null },
+      { id: 'README.txt', name: 'README.txt', type:'file', content:'Welcome to Windweb!\n音声/動画ファイルをアップロードしてダブルクリックで再生できます。', pos:null }
+  ];
+
+  let state = loadState() || {
+    users: {
+      'Guest': {
+        wallpaper: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=80",
+        desktopFiles: JSON.parse(JSON.stringify(defaultUserFiles)),
+        windowsMeta: {},
+        theme: 'light',
+        icon: null,
+        cursor: null,
+        searchEngineUrl: 'https://www.dogpile.com/serp?q=', // 新規: 検索エンジンURL
+        todos: {} // 新規: Todoリスト { 'YYYY-MM-DD': [{text: '...', done: false}, ...] }
+      }
+    },
+    currentUser: null,
+    audioVolume: 1.0,
+    version: BUILD_VERSION
+  };
+  
+  // 以前のバージョンでcursor, searchEngineUrl, todos設定がない場合に初期化
+  if (state.users) {
+      Object.keys(state.users).forEach(username => {
+          if (!state.users[username].cursor) {
+              state.users[username].cursor = null;
+          }
+          if (!state.users[username].searchEngineUrl) {
+              state.users[username].searchEngineUrl = 'https://www.dogpile.com/serp?q=';
+          }
+          if (!state.users[username].todos) {
+              state.users[username].todos = {};
+          }
+      });
+  }
+
+  function getCurrentUserData() {
+    if (state.currentUser && state.users[state.currentUser]) {
+      return state.users[state.currentUser];
+    }
+    return null;
+  }
+  
+  /* ---------- Theme and Wallpaper / Cursor ---------- */
+  function applyTheme() {
+    const userData = getCurrentUserData();
+    if (!userData) return;
+    document.body.classList.toggle('dark-mode', userData.theme === 'dark');
+  }
+  function applyWallpaper(){ 
+    const userData = getCurrentUserData();
+    if (!userData) return;
+    desktop.style.backgroundImage = userData.wallpaper ? `url(${userData.wallpaper})` : ''; 
+  }
+  function applyCursor() {
+    const userData = getCurrentUserData();
+    if (!userData || !userData.cursor) {
+        document.documentElement.style.setProperty('--cursor-default', 'default');
+    } else {
+        // 例: 'url("data:image/png;base64,...") 16 16, auto'
+        document.documentElement.style.setProperty('--cursor-default', `url("${userData.cursor.url}") ${userData.cursor.x || 0} ${userData.cursor.y || 0}, auto`);
+    }
+  }
+
+  /* ---------- Desktop Icons ---------- */
+  function renderDesktopIcons(){
+    const userData = getCurrentUserData();
+    if (!userData) return;
+    [...desktop.querySelectorAll('.desktop-icon')].forEach(e=>e.remove());
+    const iconSize = 92, margin = 22;
+    const colCount = Math.max(1, Math.floor(window.innerWidth / (iconSize + margin)));
+    userData.desktopFiles.forEach((file, idx) => {
+      const icon = document.createElement('div');
+      icon.className = 'desktop-icon';
+      if(file.pos && typeof file.pos.left === 'number'){
+        icon.style.left = file.pos.left + 'px'; icon.style.top = file.pos.top + 'px';
+      } else {
+        const left = 12 + (idx % colCount) * (iconSize + margin);
+        const top = 12 + Math.floor(idx / colCount) * (iconSize + margin);
+        icon.style.left = left + 'px'; icon.style.top = top + 'px';
+      }
+
+      const img = document.createElement('img');
+      img.alt = file.type;
+      if(file.type === 'app'){
+        if(file.app === 'explorer') img.src = 'https://cdn-icons-png.flaticon.com/512/281/281769.png';
+        else if(file.app === 'browser') img.src = 'https://cdn-icons-png.flaticon.com/512/732/732221.png';
+        else if(file.app === 'notepad') img.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
+        else if(file.app === 'musicplayer') img.src = 'https://cdn-icons-png.flaticon.com/512/727/727240.png';
+        else if(file.app === 'settings') img.src = 'https://cdn-icons-png.flaticon.com/512/3524/3524659.png';
+        else if(file.app === 'cmd') img.src = 'https://cdn-icons-png.flaticon.com/512/385/385966.png';
+        else if(file.app === 'clock') img.src = 'https://cdn-icons-png.flaticon.com/512/1034/1034159.png';
+        else if(file.app === 'calendar') img.src = 'https://cdn-icons-png.flaticon.com/512/3652/3652191.png';
+        else if(file.app === 'tetris') img.src = 'https://cdn-icons-png.flaticon.com/512/1004/1004732.png';
+        else img.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
+      } 
+      else if(file.type === 'html') img.src = 'https://cdn-icons-png.flaticon.com/512/1006/1006363.png';
+      else if(file.type === 'video') img.src = 'https://cdn-icons-png.flaticon.com/512/2930/2930019.png';
+      else if(file.type === 'audio') img.src = 'https://cdn-icons-png.flaticon.com/512/727/727245.png';
+      else img.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
+      icon.appendChild(img);
+
+      const label = document.createElement('span'); label.textContent = file.name; icon.appendChild(label);
+
+      icon.addEventListener('dblclick', () => {
+        if(file.type === 'file' || file.type === 'text') openFileInNotepad(file);
+        else if(file.type === 'folder') openFolderInExplorer(file);
+        else if(file.type === 'app') launchApp(file.app);
+        else if(file.type === 'html') openHtmlInBrowser(file);
+        else if(file.type === 'audio' || file.type === 'video') openInMusicPlayer(file);
+      });
+
+      icon.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, 'file', file); });
+
+      makeIconDraggable(icon, file);
+      desktop.appendChild(icon);
+    });
+  }
+
+  function makeIconDraggable(elem, file){
+    let dragging=false, offsetX=0, offsetY=0;
+    function down(e){
+      if(e.button !== undefined && e.button !== 0) return;
+      dragging=true;
+      elem.classList.add('dragging');
+      offsetX = (e.clientX || e.touches?.[0]?.clientX) - elem.offsetLeft;
+      offsetY = (e.clientY || e.touches?.[0]?.clientY) - elem.offsetTop;
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      e.preventDefault();
+    }
+    function move(e){
+      if(!dragging) return;
+      const cx = (e.clientX || e.touches?.[0]?.clientX);
+      const cy = (e.clientY || e.touches?.[0]?.clientY);
+      let left = cx - offsetX; let top = cy - offsetY;
+      left = Math.max(6, Math.min(window.innerWidth - elem.offsetWidth - 6, left));
+      top = Math.max(6, Math.min(window.innerHeight - elem.offsetHeight - 64, top));
+      elem.style.left = left + 'px'; elem.style.top = top + 'px';
+    }
+    function up(){
+      if(!dragging) return;
+      dragging=false; elem.classList.remove('dragging');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const left = parseInt(elem.style.left,10) || 0;
+      const top = parseInt(elem.style.top,10) || 0;
+      file.pos = { left, top };
+      saveState();
+    }
+    elem.addEventListener('pointerdown', down);
+  }
+
+  /* ---------- Start Menu ---------- */
+  function openStartMenu(){ startMenu.classList.add('active'); startButton.setAttribute('aria-expanded','true'); startMenu.setAttribute('aria-hidden','false'); updateStartMenuUser(); }
+  function closeStartMenu(){ startMenu.classList.remove('active'); startButton.setAttribute('aria-expanded','false'); startMenu.setAttribute('aria-hidden','true'); }
+  function updateStartMenuUser() {
+      const userData = getCurrentUserData();
+      if (!userData) return;
+      startMenuUsername.textContent = state.currentUser;
+      startMenuUserIcon.src = userData.icon || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath fill=\'%23ffffff\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/%3E%3C/svg%3E';
+  }
+  startButton.addEventListener('click', ()=> { if(startMenu.classList.contains('active')) closeStartMenu(); else openStartMenu(); });
+  startMenu.querySelectorAll('.app-launch').forEach(btn => btn.addEventListener('click', ()=> { launchApp(btn.dataset.app); closeStartMenu(); }));
+
+  /* ---------- Window Management ---------- */
+  function generateId(){ return 'id_' + Math.random().toString(36).slice(2,10); }
+
+  function createWindow(id, appName, titleText, opts={}) {
+    const win = document.createElement('div');
+    const useGlass = !opts.noGlass;
+    const userData = getCurrentUserData();
+    const meta = userData.windowsMeta[id] || {};
+    
+    win.className = 'window' + (useGlass ? ' glass' : '');
+    win.id = id;
+    
+    if(meta.isMaximized) {
+        win.style.left = '0px'; win.style.top = '0px';
+        win.style.width = window.innerWidth + 'px'; win.style.height = (window.innerHeight - 44) + 'px';
+        win.style.borderRadius = '0px';
+    } else {
+        win.style.width = (meta.width || 640) + 'px'; win.style.height = (meta.height || 420) + 'px';
+        win.style.left = (meta.left || `calc(50% - 320px + ${Object.keys(windows).length * 10}px)`);
+        win.style.top = (meta.top || `calc(50% - 210px + ${Object.keys(windows).length * 10}px)`);
+    }
+
+    win.style.zIndex = ++zIndexCounter;
+    win.setAttribute('role','dialog');
+    win.setAttribute('aria-label', titleText || appName);
+    win.classList.add('fade-in');
+    win.addEventListener('animationend', ()=> win.classList.remove('fade-in'));
+
+    const titlebar = document.createElement('div'); titlebar.className = 'titlebar';
+    const title = document.createElement('div'); title.className='title'; 
+    title.textContent = titleText || (
+        appName==='explorer'?'エクスプローラー':
+        appName==='notepad'?'メモ帳':
+        appName==='browser'?'ウェブブラウザ':
+        appName==='cmd'?'コマンドプロンプト':
+        appName==='clock'?'時計':
+        appName==='calendar'?'カレンダー':
+        appName==='tetris'?'テトリス':
+        appName==='settings'?'設定':
+        appName);
+    const btnMin = document.createElement('button'); btnMin.title='最小化'; btnMin.innerHTML='–';
+    const btnMax = document.createElement('button'); btnMax.title='最大化'; btnMax.innerHTML='◻';
+    const btnClose = document.createElement('button'); btnClose.title='閉じる'; btnClose.innerHTML='×';
+    titlebar.appendChild(title); titlebar.appendChild(btnMin); titlebar.appendChild(btnMax); titlebar.appendChild(btnClose);
+
+    const content = document.createElement('div'); content.className='content';
+    
+    win.appendChild(titlebar); win.appendChild(content);
+    desktop.appendChild(win);
+
+    setupWindowDrag(win, titlebar);
+    setupWindowResizeListener(win, id); // リサイズ時のリスナーを追加
+    titlebar.addEventListener('dblclick', ()=> toggleMaximizeWindow(id));
+    btnMin.addEventListener('click', (e)=>{ e.stopPropagation(); minimizeWindow(id); });
+    btnClose.addEventListener('click', (e)=>{ e.stopPropagation(); closeWindow(id); });
+    btnMax.addEventListener('click', (e)=>{ e.stopPropagation(); toggleMaximizeWindow(id); });
+    win.addEventListener('mousedown', ()=> focusWindow(id));
+
+    return { element: win, content, titlebar, titleEl: title, btns:{min:btnMin,max:btnMax,close:btnClose}, meta };
+  }
+
+  function launchApp(appName){
+    const winId = generateId();
+    const isMusic = appName === 'musicplayer';
+    const winObj = createWindow(winId, appName, (appName==='musicplayer'?'ミュージックプレイヤー':undefined), { noGlass: isMusic || appName === 'cmd' || appName === 'tetris' });
+    windows[winId] = { id:winId, name:appName, element: winObj.element, minimized:false, isMaximized:!!winObj.meta.isMaximized, prevRect:null, title: winObj.titleEl.textContent };
+    if(appName === 'explorer') renderExplorerContent(winObj.content, null);
+    else if(appName === 'notepad') { const ta = document.createElement('textarea'); ta.spellcheck=false; ta.value=''; winObj.content.appendChild(ta); }
+    else if(appName === 'browser') renderBrowserContent(winObj.content);
+    else if(appName === 'musicplayer') renderMusicPlayer(winObj.content);
+    else if(appName === 'settings') renderSettingsContent(winObj.content);
+    else if(appName === 'cmd') renderCmdContent(winObj.content, winId);
+    else if(appName === 'clock') renderClockContent(winObj.content, winId);
+    else if(appName === 'calendar') renderCalendarContent(winObj.content, winId);
+    else if(appName === 'tetris') renderTetrisContent(winObj.content, winId);
+    else winObj.content.textContent = 'アプリ ' + appName + ' が開きました';
+    focusWindow(winId);
+    saveState(); updateTaskbar();
+  }
+
+  function focusWindow(id){
+    if(!windows[id]) return;
+    focusedWindowId = id;
+    Object.values(windows).forEach(w=>{
+      if(w.id === id){
+        w.element.style.zIndex = ++zIndexCounter;
+        if(w.element.classList.contains('minimized')) w.element.classList.remove('minimized');
+        w.minimized = false;
+        try{ w.element.focus(); }catch(e){}
+      }
+    });
+    updateTaskbar();
+  }
+
+  function minimizeWindow(id){
+    if(!windows[id]) return;
+    windows[id].element.classList.add('minimized');
+    windows[id].minimized = true;
+    if(focusedWindowId === id) focusedWindowId = null;
+    updateTaskbar(); saveWindowMeta(id); saveState();
+  }
+
+  function closeWindow(id){
+    if(!windows[id]) return;
+    saveWindowMeta(id);
+    try{ desktop.removeChild(windows[id].element); }catch(e){}
+    delete windows[id];
+    if(focusedWindowId === id) focusedWindowId = null;
+    updateTaskbar(); saveState();
+  }
+
+  function updateTaskbar(){
+    taskButtonsContainer.innerHTML = '';
+    Object.values(windows).forEach(w=>{
+      const btn = document.createElement('button'); btn.className = 'task-button';
+      const displayName = w.title || (
+        w.name === 'explorer' ? 'エクスプローラー' : 
+        w.name === 'notepad' ? 'メモ帳' : 
+        w.name === 'browser' ? 'ウェブブラウザ' : 
+        w.name === 'cmd' ? 'コマンドプロンプト' :
+        w.name === 'clock' ? '時計' :
+        w.name === 'calendar' ? 'カレンダー' :
+        w.name === 'tetris' ? 'テトリス' :
+        w.name === 'musicplayer' ? 'ミュージックプレイヤー' : w.name);
+      btn.textContent = displayName;
+      if(focusedWindowId === w.id && !w.minimized) btn.classList.add('active');
+      btn.addEventListener('click', ()=> {
+        if(w.minimized){ w.element.classList.remove('minimized'); w.minimized=false; focusWindow(w.id); }
+        else if(focusedWindowId === w.id) minimizeWindow(w.id);
+        else focusWindow(w.id);
+      });
+      taskButtonsContainer.appendChild(btn);
+    });
+  }
+
+  /* ---------- Window Drag/Resize/Maximize ---------- */
+  function setupWindowDrag(winElem, titlebar){
+    let drag=false, offsetX=0, offsetY=0;
+    titlebar.addEventListener('mousedown', e=>{
+      if(e.button !== 0 || windows[winElem.id].isMaximized) return;
+      drag=true; offsetX = e.clientX - winElem.offsetLeft; offsetY = e.clientY - winElem.offsetTop;
+      winElem.style.transition = 'none'; document.body.style.userSelect='none';
+    });
+    window.addEventListener('mousemove', e=>{
+      if(!drag) return;
+      let newLeft = e.clientX - offsetX; let newTop = e.clientY - offsetY;
+      newLeft = Math.max(0, Math.min(window.innerWidth - winElem.offsetWidth, newLeft));
+      newTop = Math.max(0, Math.min(window.innerHeight - winElem.offsetHeight - 44, newTop));
+      winElem.style.left = newLeft + 'px'; winElem.style.top = newTop + 'px';
+    });
+    window.addEventListener('mouseup', ()=>{ if(drag){ drag=false; winElem.style.transition=''; document.body.style.userSelect=''; saveWindowMetaByElem(winElem); saveState(); } });
+  }
+
+  function setupWindowResizeListener(winElem, id) {
+    // リサイズイベントは直接取得できないため、mouseup/touchendでサイズ変更をチェックする
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            if (mutation.attributeName === 'style' && (mutation.target.style.width || mutation.target.style.height)) {
+                // スタイル変更があった場合（リサイズを含む）
+                saveWindowMetaByElem(winElem);
+            }
+        });
+    });
+    observer.observe(winElem, { attributes: true, attributeFilter: ['style'] });
+    
+    // リサイズ終了（mouseup）時にも保存をトリガー
+    winElem.addEventListener('mouseup', () => { 
+        if(!windows[id].isMaximized) saveWindowMetaByElem(winElem); saveState(); 
+    });
+  }
+
+  function toggleMaximizeWindow(id){
+    const w = windows[id]; if(!w) return;
+    const el = w.element;
+    if(!w.isMaximized){
+      w.prevRect = {left:el.offsetLeft, top:el.offsetTop, width:el.offsetWidth, height:el.offsetHeight};
+      el.style.left = '0px'; el.style.top = '0px';
+      el.style.width = window.innerWidth + 'px'; el.style.height = (window.innerHeight - 44) + 'px';
+      el.style.borderRadius = '0px'; w.isMaximized = true;
+    } else {
+      if(w.prevRect){
+        el.style.left = w.prevRect.left + 'px'; el.style.top = w.prevRect.top + 'px';
+        el.style.width = w.prevRect.width + 'px'; el.style.height = w.prevRect.height + 'px';
+      }
+      el.style.borderRadius = '10px'; w.isMaximized = false;
+    }
+    saveWindowMeta(id); saveState();
+  }
+  
+  window.addEventListener('resize', () => {
+    // 最大化されているウィンドウを再調整
+    Object.values(windows).filter(w => w.isMaximized).forEach(w => {
+        w.element.style.width = window.innerWidth + 'px';
+        w.element.style.height = (window.innerHeight - 44) + 'px';
+    });
+  });
+
+  /* ---------- Save Window Metadata ---------- */
+  function saveWindowMeta(id){
+    const w = windows[id]; if(!w) return;
+    const userData = getCurrentUserData(); if (!userData) return;
+    const el = w.element;
+    // 最大化状態の場合は、prevRectを保存するか、現在の位置/サイズを保存しない
+    const metaToSave = { isMaximized: !!w.isMaximized };
+    if (w.isMaximized && w.prevRect) {
+        metaToSave.left = w.prevRect.left; 
+        metaToSave.top = w.prevRect.top;
+        metaToSave.width = w.prevRect.width;
+        metaToSave.height = w.prevRect.height;
+    } else if (!w.isMaximized) {
+        metaToSave.left = el.offsetLeft; 
+        metaToSave.top = el.offsetTop; 
+        metaToSave.width = el.offsetWidth; 
+        metaToSave.height = el.offsetHeight;
+    }
+    userData.windowsMeta[id] = metaToSave;
+    saveState();
+  }
+  function saveWindowMetaByElem(el){
+    const id = el.id; if(!id || (windows[id] && windows[id].isMaximized)) return;
+    const userData = getCurrentUserData(); if (!userData) return;
+    userData.windowsMeta[id] = { 
+        left: el.offsetLeft, 
+        top: el.offsetTop, 
+        width: el.offsetWidth, 
+        height: el.offsetHeight, 
+        isMaximized: false 
+    };
+    saveState();
+  }
+
+  /* ---------- Clock ---------- */
+  function updateClock(){ const now = new Date(); const h = String(now.getHours()).padStart(2,'0'); const m = String(now.getMinutes()).padStart(2,'0'); const s = String(now.getSeconds()).padStart(2,'0'); taskbarClock.textContent = `${h}:${m}:${s}`; }
+  setInterval(updateClock, 1000); updateClock();
+
+  /* ---------- Explorer ---------- */
+  function renderExplorerContent(container, folder){
+    const userData = getCurrentUserData(); if(!userData) return;
+    // ... (既存のrenderExplorerContentロジックは変更なし)
+    container.innerHTML = '';
+    const pathBar = document.createElement('div'); pathBar.style.marginBottom='8px'; pathBar.style.fontWeight='700'; pathBar.textContent = folder ? folder.name : 'デスクトップ';
+    container.appendChild(pathBar);
+
+    const list = document.createElement('div'); list.style.display='flex'; list.style.flexWrap='wrap'; list.style.gap='12px';
+    const filesToShow = folder ? folder.children || [] : userData.desktopFiles;
+    filesToShow.forEach(file=>{
+      const item = document.createElement('div'); item.style.width='88px'; item.style.cursor='pointer'; item.style.textAlign='center'; item.style.color='inherit';
+      const icon = document.createElement('img'); icon.style.width='48px'; icon.style.height='48px'; icon.style.marginBottom='6px';
+      if(file.type === 'folder') icon.src = 'https://cdn-icons-png.flaticon.com/512/715/715676.png';
+      else if(file.type === 'app'){
+        if(file.app === 'explorer') icon.src = 'https://cdn-icons-png.flaticon.com/512/281/281769.png';
+        else if(file.app === 'browser') icon.src = 'https://cdn-icons-png.flaticon.com/512/732/732221.png';
+        else if(file.app === 'notepad') icon.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
+        else if(file.app === 'musicplayer') icon.src = 'https://cdn-icons-png.flaticon.com/512/727/727240.png';
+        else if(file.app === 'settings') icon.src = 'https://cdn-icons-png.flaticon.com/512/3524/3524659.png';
+        else if(file.app === 'cmd') icon.src = 'https://cdn-icons-png.flaticon.com/512/385/385966.png';
+        else if(file.app === 'clock') icon.src = 'https://cdn-icons-png.flaticon.com/512/1034/1034159.png';
+        else if(file.app === 'calendar') icon.src = 'https://cdn-icons-png.flaticon.com/512/3652/3652191.png';
+        else if(file.app === 'tetris') icon.src = 'https://cdn-icons-png.flaticon.com/512/1004/1004732.png';
+        else icon.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
+      }
+      else if(file.type === 'html') icon.src = 'https://cdn-icons-png.flaticon.com/512/1006/1006363.png';
+      else if(file.type === 'video') icon.src = 'https://cdn-icons-png.flaticon.com/512/2930/2930019.png';
+      else if(file.type === 'audio') icon.src = 'https://cdn-icons-png.flaticon.com/512/727/727245.png';
+      else icon.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
+      item.appendChild(icon);
+      const label = document.createElement('div'); label.textContent = file.name; label.style.fontSize='13px'; label.style.whiteSpace='nowrap'; label.style.overflow='hidden'; label.style.textOverflow='ellipsis';
+      item.appendChild(label);
+      item.addEventListener('dblclick', ()=>{
+        if(file.type==='folder') renderExplorerContent(container, file);
+        else if(file.type==='file' || file.type==='text') openFileInNotepad(file);
+        else if(file.type==='html') openHtmlInBrowser(file);
+        else if(file.type==='app') launchApp(file.app);
+        else if(file.type==='audio' || file.type==='video') openInMusicPlayer(file);
+      });
+      list.appendChild(item);
+    });
+    container.appendChild(list);
+    if(folder){
+      const backBtn = document.createElement('button'); backBtn.textContent='上の階層へ戻る'; backBtn.style.marginTop='12px'; backBtn.style.padding='8px'; backBtn.style.border='none'; backBtn.style.borderRadius='8px'; backBtn.style.cursor='pointer'; backBtn.style.background='#0078d7'; backBtn.style.color='white';
+      backBtn.addEventListener('click', ()=> renderExplorerContent(container, null)); container.appendChild(backBtn);
+    }
+  }
+
+  /* ---------- Notepad ---------- */
+  function openFileInNotepad(file){
+    const id = generateId();
+    const winObj = createWindow(id, 'notepad', file.name);
+    windows[id] = { id, name:'notepad', element: winObj.element, minimized:false, isMaximized:!!winObj.meta.isMaximized, prevRect:null, title: file.name, file };
+    
+    const ta = document.createElement('textarea'); 
+    ta.value = file.content || ''; 
+    ta.spellcheck=false;
+    winObj.content.appendChild(ta);
+    
+    // 保存ボタンを追加
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '保存';
+    saveBtn.style.position = 'absolute'; saveBtn.style.bottom = '12px'; saveBtn.style.right = '12px';
+    saveBtn.style.padding = '6px 12px'; saveBtn.style.borderRadius = '6px'; saveBtn.style.border = 'none'; saveBtn.style.cursor = 'pointer';
+    saveBtn.style.background = '#0078d7'; saveBtn.style.color = 'white';
+    
+    saveBtn.addEventListener('click', () => {
+        const currentFile = windows[id].file;
+        if(currentFile) {
+            currentFile.content = ta.value;
+            saveState();
+            alert(`${currentFile.name} を保存しました。`);
+        }
+    });
+    
+    winObj.content.style.paddingBottom = '50px'; // ボタンのためのスペースを確保
+    winObj.content.appendChild(saveBtn);
+
+    focusWindow(id); setupFileDrop(windows[id]); updateTaskbar(); saveState();
+  }
+
+  /* ---------- Web Browser with Search ---------- */
+  function renderBrowserContent(container, initialUrl='about:blank'){
+    container.innerHTML = '';
+    const userData = getCurrentUserData();
+    const searchEngineUrl = userData.searchEngineUrl || 'https://www.dogpile.com/serp?q=';
+    
+    const navBar = document.createElement('div'); navBar.style.display='flex'; navBar.style.gap='8px'; navBar.style.marginBottom='8px';
+    const urlInput = document.createElement('input'); urlInput.type='text'; urlInput.placeholder='URLを入力または検索'; urlInput.style.flex='1'; urlInput.style.padding='8px'; urlInput.style.borderRadius='8px';
+    const goBtn = document.createElement('button'); goBtn.textContent='移動'; goBtn.style.padding='8px'; goBtn.style.borderRadius='8px'; goBtn.style.border='none'; goBtn.style.cursor='pointer';
+    const iframe = document.createElement('iframe'); iframe.style.width='100%'; iframe.style.height='calc(100% - 46px)'; iframe.style.border='1px solid rgba(0,0,0,0.12)'; iframe.style.borderRadius='6px'; iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-popups";
+
+    goBtn.addEventListener('click', ()=> { 
+        let val = urlInput.value.trim(); 
+        if(!val) return;
+        
+        const isUrl = val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:') || (val.includes('.') && !val.includes(' '));
+        
+        if (isUrl) {
+            let properUrl = val;
+            if(!val.startsWith('http://') && !val.startsWith('https://') && !val.startsWith('data:')) {
+                properUrl = 'https://' + val;
+            }
+            try { iframe.src = properUrl; } catch(e) { console.warn(e); }
+        } else {
+            // 検索エンジンの設定を使用
+            try { iframe.src = searchEngineUrl + encodeURIComponent(val); } catch(e) { console.warn(e); }
+        }
+    });
+    
+    urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') goBtn.click(); });
+    navBar.appendChild(urlInput); navBar.appendChild(goBtn); container.appendChild(navBar); container.appendChild(iframe);
+    
+    if(initialUrl && initialUrl !== 'about:blank') {
+      if(initialUrl.startsWith('data:') || initialUrl.startsWith('blob:')) iframe.src = initialUrl;
+      else { urlInput.value = initialUrl; iframe.src = initialUrl; }
+    }
+    return {iframe, urlInput};
+  }
+
+  function openHtmlInBrowser(file){
+    const id = generateId();
+    const winObj = createWindow(id, 'browser', file.name);
+    windows[id] = { id, name:'browser', element: winObj.element, minimized:false, isMaximized:!!winObj.meta.isMaximized, prevRect:null, title: file.name };
+    const browser = renderBrowserContent(winObj.content);
+    
+    if(!file.dataUrl && file.content) {
+        file.dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(file.content);
+        saveState();
+    }
+    
+    if(file.dataUrl) browser.iframe.src = file.dataUrl;
+    else { const blob = new Blob([file.content || ''], {type:'text/html'}); const url = URL.createObjectURL(blob); browser.iframe.src = url; }
+    focusWindow(id); updateTaskbar(); saveState();
+  }
+
+  /* ---------- Command Prompt App ---------- */
+  function renderCmdContent(container){
+    // コンソール風の見た目を強制
+    container.style.backgroundColor = 'black';
+    container.style.color = '#00ff00';
+    container.style.fontFamily = 'monospace';
+    container.style.padding = '5px';
+    container.style.whiteSpace = 'pre-wrap';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+
+    container.innerHTML = `<span style="color:yellow;">Windweb Command Prompt [Version ${BUILD_VERSION}]</span>\n(C) 2025 Google. All rights reserved.\n\n`;
+
+    const output = document.createElement('div');
+    output.style.flex = '1';
+    output.style.overflowY = 'auto';
+    output.style.marginBottom = '5px';
+    output.style.minHeight = '100px'; // 最小高さを設定
+    container.appendChild(output);
+
+    const inputArea = document.createElement('div');
+    const prompt = document.createElement('span');
+    prompt.textContent = 'C:\\>';
+    prompt.style.color = '#00ffff';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.style.backgroundColor = 'transparent';
+    input.style.border = 'none';
+    input.style.color = '#00ff00';
+    input.style.outline = 'none';
+    input.style.width = 'calc(100% - 40px)'; // プロンプトの幅に合わせて調整
+    input.style.fontFamily = 'monospace';
+    input.setAttribute('autofocus', 'true');
+
+    inputArea.appendChild(prompt);
+    inputArea.appendChild(input);
+    container.appendChild(inputArea);
+
+    input.focus();
+
+    function executeCommand(command) {
+        let result = '';
+        const parts = command.trim().split(/\s+/);
+        const cmd = parts[0].toLowerCase();
+        const args = parts.slice(1).join(' ');
+
+        switch (cmd) {
+            case 'help':
+                result = '利用可能なコマンド:\n' +
+                         '  help          - このヘルプメッセージを表示\n' +
+                         '  echo [text]   - テキストを表示\n' +
+                         '  clear / cls   - 画面をクリア\n' +
+                         '  ls / dir      - デスクトップのファイル一覧を表示\n' +
+                         '  open [app]    - アプリを起動 (settings, notepad, browserなど)\n' +
+                         '  version       - バージョン情報を表示';
+                break;
+            case 'echo':
+                result = args;
+                break;
+            case 'clear':
+            case 'cls':
+                output.textContent = '';
+                return;
+            case 'ls':
+            case 'dir':
+                result = 'デスクトップファイル一覧:\n' + getCurrentUserData().desktopFiles.map(f => `[${f.type.toUpperCase()}] ${f.name}`).join('\n');
+                break;
+            case 'open':
+                const appName = args.toLowerCase();
+                const validApps = ['explorer', 'notepad', 'browser', 'musicplayer', 'settings', 'cmd', 'clock', 'calendar', 'tetris'];
+                if (validApps.includes(appName)) {
+                    launchApp(appName);
+                    result = `アプリ '${appName}' を起動しました。`;
+                } else {
+                    result = `エラー: アプリ '${appName}' は見つかりません。 (利用可能: ${validApps.join(', ')})`;
+                }
+                break;
+            case 'version':
+                result = `Windweb Command Prompt [Version ${BUILD_VERSION}]`;
+                break;
+            case '':
+                break;
+            default:
+                result = `エラー: コマンド '${command}' は認識されていません。 'help' で利用可能なコマンドを確認してください。`;
+        }
+
+        if (result) {
+            const resultDiv = document.createElement('div');
+            resultDiv.textContent = result;
+            output.appendChild(resultDiv);
+            output.scrollTop = output.scrollHeight;
+        }
+    }
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const command = input.value.trim();
+            const cmdLine = document.createElement('div');
+            cmdLine.innerHTML = `<span style="color:#00ffff;">C:\\></span>${command}`;
+            output.appendChild(cmdLine);
+            input.value = '';
+            executeCommand(command);
+            input.focus();
+        }
+    });
+  }
+
+  /* ---------- Clock App ---------- */
+  function renderClockContent(container){
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.alignItems = 'center';
+    container.style.justifyContent = 'center';
+    container.style.height = '100%';
+
+    const timeDisplay = document.createElement('div');
+    timeDisplay.style.fontSize = '8em';
+    timeDisplay.style.fontWeight = '200';
+    timeDisplay.style.lineHeight = '1em';
+    timeDisplay.style.marginBottom = '20px';
+    container.appendChild(timeDisplay);
+    
+    const dateDisplay = document.createElement('div');
+    dateDisplay.style.fontSize = '2em';
+    dateDisplay.style.fontWeight = '400';
+    container.appendChild(dateDisplay);
+    
+    let intervalId = null;
+
+    function updateClockApp() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        timeDisplay.textContent = `${h}:${m}:${s}`;
+
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const date = now.getDate();
+        const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][now.getDay()];
+        dateDisplay.textContent = `${year}年${month}月${date}日 (${dayOfWeek})`;
+    }
+
+    updateClockApp();
+    intervalId = setInterval(updateClockApp, 1000);
+    
+    // Clear interval when the window is closed
+    const win = container.closest('.window');
+    if (win) {
+        const closeBtn = win.querySelector('.titlebar button[title="閉じる"]');
+        closeBtn.addEventListener('click', () => clearInterval(intervalId), { once: true });
+    }
+  }
+
+  /* ---------- Calendar App with Todo ---------- */
+  function renderCalendarContent(container){
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = '2fr 1fr';
+    container.style.gap = '15px';
+    container.style.height = '100%';
+    container.style.padding = '10px';
+
+    const calendarArea = document.createElement('div');
+    calendarArea.style.display = 'flex';
+    calendarArea.style.flexDirection = 'column';
+    
+    const todoArea = document.createElement('div');
+    todoArea.style.display = 'flex';
+    todoArea.style.flexDirection = 'column';
+    todoArea.style.height = '100%';
+
+    calendarArea.innerHTML = '<h3>カレンダー</h3><div id="calendar-view" style="flex:1;"></div>';
+    todoArea.innerHTML = '<h3>TODOリスト</h3><div id="todo-list" style="flex:1; overflow-y:auto; border:1px solid rgba(0,0,0,0.1); padding:8px; border-radius:6px; margin-bottom:8px;"></div><input type="text" id="todo-input" placeholder="新しいTODOを追加..." style="padding:6px; border-radius:4px; border:1px solid #ccc; width:100%;"></div>';
+    
+    container.appendChild(calendarArea);
+    container.appendChild(todoArea);
+    
+    const calendarView = calendarArea.querySelector('#calendar-view');
+    const todoListEl = todoArea.querySelector('#todo-list');
+    const todoInput = todoArea.querySelector('#todo-input');
+    
+    let currentDate = new Date(); // Current date being viewed
+    let selectedDate = new Date(); // Date currently selected for Todo
+
+    function getSelectedDateKey() {
+        return selectedDate.toISOString().slice(0, 10); // YYYY-MM-DD
+    }
+    
+    // Fix timezone issue by adjusting to the start of the day
+    function getAdjustedDate(date) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    selectedDate = getAdjustedDate(selectedDate);
+    currentDate = getAdjustedDate(currentDate);
+
+    // --- Todo Logic ---
+    function renderTodoList() {
+        const userData = getCurrentUserData();
+        const dateKey = getSelectedDateKey();
+        const todos = userData.todos[dateKey] || [];
+        
+        todoListEl.innerHTML = `<h4>${dateKey} のTODO</h4>`;
+        
+        const ul = document.createElement('ul');
+        ul.style.listStyle = 'none'; ul.style.padding = '0'; ul.style.margin = '0';
+        
+        if (todos.length === 0) {
+            const div = document.createElement('div'); div.className = 'muted'; div.textContent = 'TODOはありません。';
+            ul.appendChild(div);
+        }
+        
+        todos.forEach((todo, index) => {
+            const li = document.createElement('li');
+            li.style.padding = '5px 0';
+            li.style.borderBottom = '1px dashed rgba(0,0,0,0.05)';
+            li.innerHTML = `
+                <input type="checkbox" data-index="${index}" ${todo.done ? 'checked' : ''} style="margin-right:8px; vertical-align: middle;">
+                <span style="text-decoration: ${todo.done ? 'line-through' : 'none'}; vertical-align: middle;">${todo.text}</span>
+                <button data-index="${index}" style="float:right; background:transparent; border:none; color:red; cursor:pointer;">×</button>
+            `;
+            ul.appendChild(li);
+        });
+        todoListEl.appendChild(ul);
+        
+        // Event listeners for todo actions
+        ul.addEventListener('click', (e) => {
+            const target = e.target;
+            const index = target.dataset.index;
+            if (index === undefined) return;
+            
+            if (target.type === 'checkbox') {
+                const todo = userData.todos[dateKey][index];
+                todo.done = target.checked;
+                saveState();
+                renderTodoList();
+            } else if (target.tagName === 'BUTTON') {
+                userData.todos[dateKey].splice(index, 1);
+                saveState();
+                renderTodoList();
+                renderCalendarView(); // To update the dot
+            }
+        });
+    }
+
+    todoInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && todoInput.value.trim()) {
+            const userData = getCurrentUserData();
+            const dateKey = getSelectedDateKey();
+            if (!userData.todos[dateKey]) userData.todos[dateKey] = [];
+            userData.todos[dateKey].push({ text: todoInput.value.trim(), done: false });
+            todoInput.value = '';
+            saveState();
+            renderTodoList();
+            renderCalendarView(); // To update the dot
+        }
+    });
+
+    // --- Calendar Logic ---
+    function renderCalendarView() {
+        calendarView.querySelector('#calendar-view-table')?.remove();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth(); // 0-11
+        const userData = getCurrentUserData();
+
+        const header = calendarArea.querySelector('h3');
+        header.innerHTML = `<h3>カレンダー</h3>`; // Reset header
+
+        const headerNav = document.createElement('div');
+        headerNav.style.display = 'flex';
+        headerNav.style.justifyContent = 'space-between';
+        headerNav.style.marginBottom = '10px';
+        headerNav.innerHTML = `
+            <button id="prev-month" style="padding:5px 10px; border-radius:4px; cursor:pointer;"><</button>
+            <span style="font-weight:bold; font-size:1.2em;">${year}年 ${month + 1}月</span>
+            <button id="next-month" style="padding:5px 10px; border-radius:4px; cursor:pointer;">></button>
+        `;
+        calendarView.prepend(headerNav); // Place navigation at the top
+
+        // Grid for days
+        const daysGrid = document.createElement('div');
+        daysGrid.id = 'calendar-view-table';
+        daysGrid.style.display = 'grid';
+        daysGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+        daysGrid.style.textAlign = 'center';
+
+        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+        dayNames.forEach(day => {
+            const dayName = document.createElement('div');
+            dayName.textContent = day;
+            dayName.style.fontWeight = 'bold';
+            dayName.style.padding = '5px 0';
+            dayName.style.color = (day === '日') ? 'red' : (day === '土' ? 'blue' : 'inherit');
+            daysGrid.appendChild(dayName);
+        });
+
+        const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 (Sun) - 6 (Sat)
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        // Fill in leading blank cells
+        for (let i = 0; i < firstDayOfMonth; i++) {
+            daysGrid.appendChild(document.createElement('div'));
+        }
+
+        // Fill in days
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayEl = document.createElement('div');
+            dayEl.textContent = day;
+            dayEl.style.padding = '8px 4px';
+            dayEl.style.border = '1px solid rgba(0,0,0,0.05)';
+            dayEl.style.cursor = 'pointer';
+            dayEl.style.position = 'relative';
+            const dayKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            dayEl.dataset.date = dayKey;
+            
+            // Highlight selected day
+            if (dayKey === getSelectedDateKey()) {
+                dayEl.style.backgroundColor = 'rgba(0, 120, 215, 0.5)';
+                dayEl.style.color = 'white';
+                dayEl.style.borderRadius = '4px';
+            } else {
+                 dayEl.style.backgroundColor = 'transparent';
+                 dayEl.style.color = 'inherit';
+            }
+
+            // Check for todos and add a visual cue
+            const todos = userData.todos[dayKey] || [];
+            if (todos.length > 0) {
+                const dot = document.createElement('span');
+                dot.style.position = 'absolute';
+                dot.style.bottom = '2px';
+                dot.style.right = '2px';
+                dot.style.width = '5px';
+                dot.style.height = '5px';
+                dot.style.borderRadius = '50%';
+                dot.style.backgroundColor = todos.some(t => !t.done) ? 'red' : 'green';
+                dayEl.appendChild(dot);
+            }
+            
+            dayEl.addEventListener('click', () => {
+                selectedDate = new Date(year, month, day);
+                selectedDate = getAdjustedDate(selectedDate);
+                renderCalendarView(); // Re-render to update selection highlight
+                renderTodoList(); // Update todo list for the new selection
+            });
+
+            daysGrid.appendChild(dayEl);
+        }
+
+        calendarView.appendChild(daysGrid);
+
+        // Month navigation
+        headerNav.querySelector('#prev-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            currentDate = getAdjustedDate(currentDate);
+            renderCalendarView();
+        });
+        headerNav.querySelector('#next-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            currentDate = getAdjustedDate(currentDate);
+            renderCalendarView();
+        });
+    }
+
+    // Initial load
+    renderCalendarView();
+    renderTodoList();
+  }
+
+  /* ---------- Tetris Game App ---------- */
+  function renderTetrisContent(container){
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      container.style.alignItems = 'center';
+      container.style.justifyContent = 'flex-start';
+      container.style.height = '100%';
+      container.style.userSelect = 'none';
+
+      container.innerHTML = '<h3>テトリス風ゲーム</h3><div id="tetris-game-area" style="width:200px; height:400px; border:2px solid #333; background:#222; display:grid; grid-template-columns:repeat(10, 1fr); grid-template-rows:repeat(20, 1fr); margin-bottom:10px;"></div><div id="score-display">スコア: 0</div><button id="start-tetris">ゲーム開始 (Space)</button><div class="muted" style="margin-top:10px;">操作: ← → ↓ 回転: ↑/Space</div>';
+
+      const gameArea = container.querySelector('#tetris-game-area');
+      const scoreDisplay = container.querySelector('#score-display');
+      const startBtn = container.querySelector('#start-tetris');
+      
+      // Game variables
+      const ROWS = 20;
+      const COLS = 10;
+      const BLOCK_SIZE = 20; // in pixels
+      let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+      let currentPiece = null;
+      let pieceX = 0;
+      let pieceY = 0;
+      let score = 0;
+      let gameInterval = null;
+      let isGameOver = false;
+
+      // Tetrominoes (Simplified)
+      const SHAPES = [
+          [[1, 1], [1, 1]], // O
+          [[0, 1, 0], [1, 1, 1], [0, 0, 0]], // T
+          [[1, 1, 0], [0, 1, 1], [0, 0, 0]], // S
+          [[0, 1, 1], [1, 1, 0], [0, 0, 0]], // Z
+          [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], // I
+          [[1, 0, 0], [1, 1, 1], [0, 0, 0]], // J
+          [[0, 0, 1], [1, 1, 1], [0, 0, 0]] // L
+      ];
+      const COLORS = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#00FFFF', '#FF7F00', '#800080']; // R, G, B, Y, C, O, P
+      
+      // --- Rendering ---
+      function drawBoard() {
+          gameArea.innerHTML = '';
+          for (let r = 0; r < ROWS; r++) {
+              for (let c = 0; c < COLS; c++) {
+                  const cell = document.createElement('div');
+                  cell.style.width = `${BLOCK_SIZE}px`;
+                  cell.style.height = `${BLOCK_SIZE}px`;
+                  cell.style.border = '1px solid rgba(0,0,0,0.1)';
+                  
+                  let colorIndex = board[r][c];
+                  
+                  // Draw fixed blocks
+                  if (colorIndex > 0) {
+                      cell.style.backgroundColor = COLORS[colorIndex - 1];
+                  } else {
+                      cell.style.backgroundColor = '#222';
+                  }
+                  
+                  // Draw current piece (overlayed logic is simplified in DOM grid)
+                  if (currentPiece) {
+                      const pieceMatrix = currentPiece.matrix;
+                      const pieceColor = COLORS[currentPiece.colorIndex];
+                      
+                      for (let py = 0; py < pieceMatrix.length; py++) {
+                          for (let px = 0; px < pieceMatrix[py].length; px++) {
+                              if (pieceMatrix[py][px] === 1) {
+                                  if (r === pieceY + py && c === pieceX + px) {
+                                      cell.style.backgroundColor = pieceColor;
+                                  }
+                              }
+                          }
+                      }
+                  }
+                  
+                  gameArea.appendChild(cell);
+              }
+          }
+          scoreDisplay.textContent = `スコア: ${score}`;
+      }
+
+      // --- Piece Logic ---
+      function createPiece() {
+          const typeIndex = Math.floor(Math.random() * SHAPES.length);
+          return {
+              matrix: SHAPES[typeIndex],
+              colorIndex: typeIndex
+          };
+      }
+      
+      function newPiece() {
+          currentPiece = createPiece();
+          pieceX = Math.floor(COLS / 2) - Math.floor(currentPiece.matrix[0].length / 2);
+          pieceY = 0;
+          
+          if (checkCollision(0, 0)) {
+              isGameOver = true;
+              clearInterval(gameInterval);
+              document.removeEventListener('keydown', handleControls);
+              alert(`ゲームオーバー! スコア: ${score}`);
+              startBtn.disabled = false;
+          }
+      }
+      
+      function checkCollision(dx, dy, piece=currentPiece.matrix) {
+          for (let y = 0; y < piece.length; y++) {
+              for (let x = 0; x < piece[y].length; x++) {
+                  if (piece[y][x] === 1) {
+                      const newY = pieceY + y + dy;
+                      const newX = pieceX + x + dx;
+                      
+                      // Check horizontal boundaries
+                      if (newX < 0 || newX >= COLS) {
+                          return true;
+                      }
+                      // Check floor
+                      if (newY >= ROWS) {
+                          return true;
+                      }
+                      // Check occupied cells
+                      if (newY >= 0 && board[newY][newX] !== 0) {
+                          return true;
+                      }
+                  }
+              }
+          }
+          return false;
+      }
+      
+      function mergePiece() {
+          for (let y = 0; y < currentPiece.matrix.length; y++) {
+              for (let x = 0; x < currentPiece.matrix[y].length; x++) {
+                  if (currentPiece.matrix[y][x] === 1) {
+                      const targetY = pieceY + y;
+                      const targetX = pieceX + x;
+                      if (targetY >= 0 && targetY < ROWS && targetX >= 0 && targetX < COLS) {
+                           board[targetY][targetX] = currentPiece.colorIndex + 1;
+                      }
+                  }
+              }
+          }
+          currentPiece = null;
+          checkLines();
+      }
+      
+      function checkLines() {
+          let linesCleared = 0;
+          for (let r = ROWS - 1; r >= 0; r--) {
+              if (board[r].every(cell => cell !== 0)) {
+                  // Clear line
+                  board.splice(r, 1);
+                  board.unshift(Array(COLS).fill(0)); // Add empty line to the top
+                  linesCleared++;
+                  r++; // Recheck the new line at this row index
+              }
+          }
+          
+          if (linesCleared > 0) {
+              score += [0, 10, 30, 50, 80][linesCleared] || 100; // Scoring system
+          }
+      }
+      
+      function rotatePiece(matrix) {
+          const N = matrix.length;
+          const M = matrix[0].length;
+          const newMatrix = Array.from({ length: M }, () => Array(N).fill(0));
+          
+          for (let y = 0; y < N; y++) {
+              for (let x = 0; x < M; x++) {
+                  newMatrix[x][N - 1 - y] = matrix[y][x];
+              }
+          }
+          return newMatrix;
+      }
+      
+      function handleControls(e) {
+          if (isGameOver || !currentPiece || !container.closest('.window')) return;
+          
+          // Only handle controls if the tetris window is the focused one (heuristic)
+          if (container.closest('.window').id !== focusedWindowId) return;
+
+          let moved = true;
+          let newPieceMatrix = currentPiece.matrix;
+          let dx = 0, dy = 0;
+
+          switch (e.key) {
+              case 'ArrowLeft': dx = -1; break;
+              case 'ArrowRight': dx = 1; break;
+              case 'ArrowDown': dy = 1; break;
+              case 'ArrowUp': 
+              case ' ': // Space for rotation
+                  newPieceMatrix = rotatePiece(currentPiece.matrix);
+                  if (!checkCollision(0, 0, newPieceMatrix)) {
+                      currentPiece.matrix = newPieceMatrix;
+                  } else {
+                      // Try simple wall kicks
+                      const kicks = [0, -1, 1, -2, 2];
+                      for (const kick of kicks) {
+                          if (!checkCollision(kick, 0, newPieceMatrix)) {
+                              currentPiece.matrix = newPieceMatrix;
+                              pieceX += kick;
+                              break;
+                          }
+                      }
+                  }
+                  moved = false;
+                  break;
+              default: moved = false;
+          }
+
+          if (moved) {
+              if (!checkCollision(dx, dy)) {
+                  pieceX += dx;
+                  pieceY += dy;
+              } else if (dy === 1) {
+                  mergePiece();
+                  newPiece();
+              }
+          }
+          
+          drawBoard();
+          e.preventDefault(); // Prevent scrolling
+      }
+      
+      // --- Game Loop ---
+      function gameLoop() {
+          if (isGameOver || !currentPiece) return;
+
+          if (checkCollision(0, 1)) {
+              mergePiece();
+              newPiece();
+          } else {
+              pieceY++;
+          }
+
+          drawBoard();
+      }
+      
+      function startGame() {
+          if (gameInterval) clearInterval(gameInterval);
+          
+          board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+          score = 0;
+          isGameOver = false;
+          currentPiece = null;
+          newPiece();
+          drawBoard();
+          
+          gameInterval = setInterval(gameLoop, 1000); // 1秒ごとに落下
+          startBtn.disabled = true;
+
+          // Add event listener globally for controls
+          document.addEventListener('keydown', handleControls);
+      }
+      
+      // Clear interval and event listener when the window is closed
+      const win = container.closest('.window');
+      if (win) {
+          const closeBtn = win.querySelector('.titlebar button[title="閉じる"]');
+          const cleanup = () => {
+              clearInterval(gameInterval);
+              document.removeEventListener('keydown', handleControls);
+              startBtn.disabled = false;
+          };
+          closeBtn.addEventListener('click', cleanup, { once: true });
+          
+          // 最小化/最大化時にも一時停止/再開したい場合はロジックを追加する必要がありますが、ここでは省略
+      }
+
+      startBtn.addEventListener('click', startGame);
+      
+      // Initial draw
+      drawBoard();
+  }
+
+  /* ---------- File Uploads and Drag & Drop ---------- */
+  function addFileToDesktop(fileObject) {
+    const userData = getCurrentUserData();
+    if (!userData) return;
+    userData.desktopFiles.push(fileObject);
+    renderDesktopIcons();
+    saveState();
+  }
+  
+  function handleFileUpload(f) {
+      if (!f) return;
+      const reader = new FileReader();
+      const id = generateId();
+      const pos = null;
+
+      if(f.type.startsWith('audio/') || f.type.startsWith('video/')) {
+        const blobUrl = URL.createObjectURL(f);
+        const type = f.type.startsWith('audio/') ? 'audio' : 'video';
+        addFileToDesktop({ id, name: f.name, type, url: blobUrl, mime: f.type, pos });
+      } else if (f.name.match(/\.html?$/i) || f.type === 'text/html') {
+          reader.onload = ev => {
+              const content = ev.target.result;
+              const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(content);
+              addFileToDesktop({ id, name: f.name, type: 'html', content, dataUrl, pos });
+          };
+          reader.readAsText(f);
+      } else if (f.type.startsWith('text/') || f.name.match(/\.(txt|md|json|js|css)$/i)) {
+          reader.onload = ev => {
+              addFileToDesktop({ id, name: f.name, type: 'file', content: ev.target.result, pos });
+          };
+          reader.readAsText(f);
+      } else {
+          alert('対応していないファイル形式です: ' + f.name);
+      }
+  }
+
+  uploadBtn.addEventListener('click', ()=> fileUploadInput.click());
+  fileUploadInput.addEventListener('change', (e) => {
+    handleFileUpload(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  uploadHtmlBtn.addEventListener('click', ()=> {
+    const i = document.createElement('input'); i.type='file'; i.accept='.html,text/html'; i.style.display='none'; document.body.appendChild(i);
+    i.addEventListener('change', e=> { handleFileUpload(e.target.files[0]); document.body.removeChild(i); });
+    i.click();
+  });
+  
+  desktop.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+  desktop.addEventListener('drop', e=>{
+    e.preventDefault();
+    if (e.dataTransfer.files) {
+        [...e.dataTransfer.files].forEach(handleFileUpload);
+    }
+  });
+  
+  function setupFileDrop(win){
+    try {
+      const content = win.element.querySelector('.content');
+      content.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+      content.addEventListener('drop', e=>{
+        e.preventDefault();
+        if (e.dataTransfer.files) [...e.dataTransfer.files].forEach(handleFileUpload);
+      });
+    } catch(e){ console.warn('setupFileDrop err', e); }
+  }
+
+  /* ---------- Context Menu ---------- */
+  function showContextMenu(x,y, type, file){
+    contextMenu.style.left = x + 'px'; contextMenu.style.top = y + 'px'; contextMenu.style.display='flex';
+    contextMenu.setAttribute('aria-hidden','false');
+    const sub = document.getElementById('context-sub'); sub.innerHTML='';
+    if(type === 'file' && file){
+      const btnOpen = document.createElement('button'); btnOpen.textContent='開く';
+      btnOpen.addEventListener('click', ()=>{
+          if(file.type==='html') openHtmlInBrowser(file);
+          else if(file.type==='file') openFileInNotepad(file);
+          else if(file.type==='app') launchApp(file.app);
+          else if(file.type==='audio'||file.type==='video') openInMusicPlayer(file);
+          contextMenu.style.display='none';
+      });
+      const btnDelete = document.createElement('button'); btnDelete.textContent='削除';
+      btnDelete.addEventListener('click', ()=>{
+          const userData = getCurrentUserData();
+          if(userData) {
+              userData.desktopFiles = userData.desktopFiles.filter(f=>f.id!==file.id);
+              renderDesktopIcons();
+              saveState();
+          }
+          contextMenu.style.display='none';
+      });
+      sub.appendChild(btnOpen); sub.appendChild(btnDelete); sub.style.display='flex';
+    } else { sub.style.display='none'; }
+  }
+  desktop.addEventListener('contextmenu', e=>{ if(e.target.closest('.desktop-icon')) return; e.preventDefault(); showContextMenu(e.clientX, e.clientY, 'desktop', null); });
+  document.addEventListener('click', e=>{ if(!contextMenu.contains(e.target)) { contextMenu.style.display='none'; contextMenu.setAttribute('aria-hidden','true'); } if(!startMenu.contains(e.target) && e.target !== startButton) closeStartMenu(); });
+
+  /* ---------- Context Menu Actions ---------- */
+  createFileBtn.addEventListener('click', ()=>{
+    const name = prompt('ファイル名を入力してください（例: 新規.txt）','新規.txt'); if(!name) return;
+    const type = name.match(/\.html?$/i) ? 'html' : 'file';
+    addFileToDesktop({ id: generateId(), name, type, content: '', pos:null });
+  });
+
+  uploadWallpaperBtn.addEventListener('click', ()=> wallpaperUploadInput.click());
+  wallpaperUploadInput.addEventListener('change', e=>{
+    const f = e.target.files[0]; if(!f || !f.type.startsWith('image/')) { alert('画像を選択してください'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => { 
+      const userData = getCurrentUserData();
+      if(userData) {
+          userData.wallpaper = ev.target.result; 
+          applyWallpaper(); 
+          saveState(); 
+      }
+    };
+    reader.readAsDataURL(f);
+  });
+  changeWallpaperBtn.addEventListener('click', ()=> {
+    const preset = prompt('壁紙URLを入力、または preset と入力（presetでサンプル）', 'preset'); if(!preset) return;
+    const userData = getCurrentUserData();
+    if(userData) {
+        userData.wallpaper = (preset === 'preset') ? "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=80" : preset;
+        applyWallpaper();
+        saveState();
+    }
+  });
+
+  /* ---------- User Authentication / Sign-on / Backup/Load ---------- */
+  function populateUserSelect() {
+      userSelect.innerHTML = '';
+      Object.keys(state.users).forEach(username => {
+          const option = document.createElement('option');
+          option.value = username;
+          option.textContent = username;
+          userSelect.appendChild(option);
+      });
+  }
+
+  function performSignon(username) { 
+      if (!state.users[username]) {
+          alert('ユーザーが存在しません。');
+          return;
+      }
+      state.currentUser = username; 
+      saveState(); 
+      signonOverlay.style.display = 'none';
+      document.body.focus();
+      bootSystem();
+  }
+
+  signonBtn.addEventListener('click', ()=> { 
+      const selectedUser = userSelect.value;
+      if (selectedUser) {
+        performSignon(selectedUser);
+      }
+  });
+
+  createUserBtn.addEventListener('click', () => {
+      const newName = newUsernameInput.value.trim();
+      if (!newName) {
+          alert('ユーザー名を入力してください。');
+          return;
+      }
+      if (state.users[newName]) {
+          alert('そのユーザー名は既に使用されています。');
+          return;
+      }
+      state.users[newName] = {
+          wallpaper: `https://source.unsplash.com/random/1920x1080?nature,${Math.random()}`,
+          desktopFiles: JSON.parse(JSON.stringify(defaultUserFiles)),
+          windowsMeta: {},
+          theme: 'light',
+          icon: null,
+          cursor: null,
+          searchEngineUrl: 'https://www.dogpile.com/serp?q=',
+          todos: {}
+      };
+      newUsernameInput.value = '';
+      populateUserSelect();
+      userSelect.value = newName;
+      saveState();
+      alert(`ユーザー「${newName}」を作成しました。`);
+  });
+  
+  deleteUserBtn.addEventListener('click', () => {
+      const selectedUser = userSelect.value;
+      if (!selectedUser) return;
+      if (Object.keys(state.users).length <= 1) {
+          alert('最後のユーザーは削除できません。');
+          return;
+      }
+      if (confirm(`本当にユーザー「${selectedUser}」を削除しますか？この操作は元に戻せません。`)) {
+          delete state.users[selectedUser];
+          populateUserSelect();
+          saveState();
+          alert(`ユーザー「${selectedUser}」を削除しました。`);
+      }
+  });
+  
+  backupBtn.addEventListener('click', () => {
+    downloadJson(state, `windweb_backup_${new Date().toISOString().slice(0,10)}.json`);
+    alert('バックアップファイルを作成しました。');
+  });
+
+  loadBackupBtn.addEventListener('click', () => backupFileInput.click());
+  backupFileInput.addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f || f.type !== 'application/json') {
+          alert('JSONファイルを選択してください。');
+          return;
+      }
+      const reader = new FileReader();
+      reader.onload = ev => {
+          try {
+              const loadedState = JSON.parse(ev.target.result);
+              if (loadedState && loadedState.users) {
+                  state = loadedState;
+                  state.currentUser = null; // 強制的にログアウト状態に戻す
+                  saveState();
+                  alert('バックアップをロードしました。再サインインしてください。');
+                  location.reload();
+              } else {
+                  throw new Error('無効なバックアップファイル形式です。');
+              }
+          } catch(err) {
+              alert('バックアップファイルの解析に失敗しました: ' + err.message);
+          }
+      };
+      reader.readAsText(f);
+  });
+
+  /* ---------- Music Player ---------- */
+  function renderMusicPlayer(container, initialFile){
+    // ... (既存のrenderMusicPlayerロジックは変更なし)
+    container.innerHTML = '';
+    const controlsBar = document.createElement('div'); controlsBar.style.display='flex'; controlsBar.style.gap='8px'; controlsBar.style.marginBottom='8px';
+    const addBtn = document.createElement('button'); addBtn.textContent='ファイルを追加'; addBtn.style.padding='8px'; addBtn.style.borderRadius='8px'; addBtn.style.border='none'; addBtn.style.cursor='pointer';
+    const inputFile = document.createElement('input'); inputFile.type='file'; inputFile.accept='audio/*,video/*'; inputFile.style.display='none';
+    addBtn.addEventListener('click', ()=> inputFile.click());
+    inputFile.addEventListener('change', e=>{ handleFileUpload(e.target.files[0]); });
+
+    controlsBar.appendChild(addBtn); controlsBar.appendChild(inputFile);
+    container.appendChild(controlsBar);
+
+    const playerArea = document.createElement('div'); playerArea.style.flex='1'; playerArea.style.display='flex'; playerArea.style.flexDirection='column'; playerArea.style.gap='8px';
+    const mediaWrapper = document.createElement('div'); mediaWrapper.style.minHeight='120px';
+    const playlist = document.createElement('div'); playlist.className='playlist';
+    playerArea.appendChild(mediaWrapper); playerArea.appendChild(playlist); container.appendChild(playerArea);
+
+    function rebuildPlaylist(){
+      playlist.innerHTML = '';
+      const userData = getCurrentUserData();
+      if (!userData) return;
+      const items = userData.desktopFiles.filter(f=>f.type==='audio' || f.type==='video');
+      items.forEach(f=>{
+        const it = document.createElement('div'); it.className='item'; it.textContent = f.name;
+        it.dataset.id = f.id;
+        it.addEventListener('click', ()=> {
+          const fileObj = getCurrentUserData().desktopFiles.find(x => x.id === it.dataset.id);
+          if(fileObj) playMediaInWrapper(mediaWrapper, fileObj);
+        });
+        playlist.appendChild(it);
+      });
+    }
+
+    if(initialFile){
+      let f = getCurrentUserData().desktopFiles.find(x=>x.id===initialFile.id) || initialFile;
+      playMediaInWrapper(mediaWrapper, f);
+    }
+    rebuildPlaylist();
+  }
+
+  function playMediaInWrapper(wrapper, file){
+    wrapper.innerHTML = '';
+    const isVideo = (file.type === 'video') || (file.url && file.url.match(/\.(mp4|webm|ogg)$/i));
+    let media = isVideo ? document.createElement('video') : document.createElement('audio');
+    media.src = file.url || file.dataUrl || file.content || '';
+    media.controls = true; media.autoplay = true;
+    media.style.width = '100%'; media.style.maxHeight = '360px';
+    try { media.volume = typeof state.audioVolume === 'number' ? state.audioVolume : 1.0; } catch(e){}
+    wrapper.appendChild(media);
+    media.play().catch(()=>{ /* autoplay blocked */ });
+  }
+
+  function openInMusicPlayer(file){
+    const id = generateId();
+    const winObj = createWindow(id, 'musicplayer', file.name, { noGlass: true });
+    windows[id] = { id, name:'musicplayer', element: winObj.element, minimized:false, isMaximized:!!winObj.meta.isMaximized, prevRect:null, title: file.name };
+    const fobj = getCurrentUserData().desktopFiles.find(x => x.id === file.id) || file;
+    renderMusicPlayer(winObj.content, fobj);
+    focusWindow(id); updateTaskbar(); saveState();
+  }
+  
+  /* ---------- Settings App ---------- */
+  function renderSettingsContent(container) {
+    container.innerHTML = '';
+    const userData = getCurrentUserData();
+    if (!userData) return;
+    
+    const createSection = (title) => {
+        const section = document.createElement('div');
+        section.className = 'settings-section';
+        const h4 = document.createElement('h4');
+        h4.textContent = title;
+        section.appendChild(h4);
+        container.appendChild(section);
+        return section;
+    };
+
+    const appearanceSection = createSection('外観');
+    
+    const themeBtn = document.createElement('button');
+    themeBtn.textContent = userData.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
+    themeBtn.addEventListener('click', () => {
+        userData.theme = userData.theme === 'dark' ? 'light' : 'dark';
+        applyTheme();
+        saveState();
+        themeBtn.textContent = userData.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
+    });
+    appearanceSection.appendChild(themeBtn);
+    appearanceSection.appendChild(document.createElement('hr'));
+    
+    const bgLabel = document.createElement('div'); bgLabel.textContent = '背景画像';
+    const bgInput = document.createElement('input'); bgInput.type = 'file'; bgInput.accept = 'image/*';
+    bgInput.addEventListener('change', e => {
+        const f = e.target.files[0]; if(!f) return;
+        const reader = new FileReader();
+        reader.onload = ev => { userData.wallpaper = ev.target.result; applyWallpaper(); saveState(); alert('背景を更新しました。'); };
+        reader.readAsDataURL(f);
+    });
+    appearanceSection.appendChild(bgLabel);
+    appearanceSection.appendChild(bgInput);
+    appearanceSection.appendChild(document.createElement('hr'));
+    
+    // カーソル設定
+    const cursorLabel = document.createElement('div'); cursorLabel.textContent = 'マウスカーソル';
+    const cursorInput = document.getElementById('cursor-upload-input').cloneNode(true); // input要素をクローンして利用
+    cursorInput.style.display = 'block';
+    cursorInput.value = ''; // 以前のファイル名をクリア
+    
+    const cursorHotspotX = document.createElement('input'); cursorHotspotX.type='number'; cursorHotspotX.placeholder='Xホットスポット(0)'; cursorHotspotX.value = userData.cursor?.x || 0; cursorHotspotX.style.width='80px';
+    const cursorHotspotY = document.createElement('input'); cursorHotspotY.type='number'; cursorHotspotY.placeholder='Yホットスポット(0)'; cursorHotspotY.value = userData.cursor?.y || 0; cursorHotspotY.style.width='80px';
+    const hotspotGroup = document.createElement('div'); hotspotGroup.style.display='flex'; hotspotGroup.style.gap='8px'; hotspotGroup.appendChild(cursorHotspotX); hotspotGroup.appendChild(cursorHotspotY);
+    
+    const currentCursor = document.createElement('div'); 
+    currentCursor.className = 'muted';
+    currentCursor.textContent = userData.cursor ? `現在のカーソル: ${userData.cursor.name}` : 'デフォルトのカーソルを使用中';
+
+    cursorInput.addEventListener('change', e => {
+        const f = e.target.files[0]; 
+        if(!f) return;
+        
+        const fileType = f.name.split('.').pop().toLowerCase();
+        if (fileType !== 'cur' && fileType !== 'png' && fileType !== 'gif') {
+             alert('対応しているカーソル形式は.cur、.png、.gifです。アニメーションカーソル(.ani)はブラウザの制限でサポートされていません。');
+             return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = ev => { 
+            userData.cursor = { 
+                name: f.name,
+                url: ev.target.result, 
+                x: Number(cursorHotspotX.value) || 0,
+                y: Number(cursorHotspotY.value) || 0
+            };
+            applyCursor();
+            saveState(); 
+            currentCursor.textContent = `現在のカーソル: ${f.name}`;
+            alert('カーソルを更新しました。'); 
+        };
+        reader.readAsDataURL(f);
+    });
+    
+    const defaultCursorBtn = document.createElement('button');
+    defaultCursorBtn.textContent = 'デフォルトに戻す';
+    defaultCursorBtn.addEventListener('click', () => {
+        userData.cursor = null;
+        applyCursor();
+        saveState();
+        currentCursor.textContent = 'デフォルトのカーソルを使用中';
+        alert('カーソルをデフォルトに戻しました。');
+    });
+
+    appearanceSection.appendChild(cursorLabel);
+    appearanceSection.appendChild(cursorInput);
+    appearanceSection.appendChild(currentCursor);
+    appearanceSection.appendChild(hotspotGroup);
+    appearanceSection.appendChild(defaultCursorBtn);
+
+    const accountSection = createSection('アカウント');
+
+    const iconLabel = document.createElement('div'); iconLabel.textContent = 'ユーザーアイコン';
+    const iconUpload = document.createElement('input'); iconUpload.type = 'file'; iconUpload.accept = 'image/*';
+    iconUpload.addEventListener('change', e => {
+        const f = e.target.files[0]; if(!f) return;
+        const reader = new FileReader();
+        reader.onload = ev => { userData.icon = ev.target.result; saveState(); updateStartMenuUser(); alert('アイコンを更新しました。'); };
+        reader.readAsDataURL(f);
+    });
+    accountSection.appendChild(iconLabel);
+    accountSection.appendChild(iconUpload);
+    accountSection.appendChild(document.createElement('hr'));
+
+    const logoutBtn = document.createElement('button');
+    logoutBtn.textContent = 'ログアウト';
+    logoutBtn.addEventListener('click', () => {
+        if(confirm('ログアウトしますか？')) {
+            state.currentUser = null;
+            saveState();
+            location.reload();
+        }
+    });
+    accountSection.appendChild(logoutBtn);
+
+    const audioSection = createSection('オーディオ');
+    const volRow = document.createElement('div'); volRow.style.display='flex'; volRow.style.alignItems='center'; volRow.style.gap='8px';
+    const volLabel = document.createElement('div'); volLabel.textContent = 'グローバル音量';
+    const volInput = document.createElement('input'); volInput.type='range'; volInput.min='0'; volInput.max='100';
+    volInput.value = Math.round((typeof state.audioVolume === 'number' ? state.audioVolume : 1.0) * 100);
+    const volVal = document.createElement('div'); volVal.textContent = volInput.value + '%';
+    volInput.addEventListener('input', () => { volVal.textContent = volInput.value + '%'; });
+    volInput.addEventListener('change', () => {
+        const v = Math.max(0, Math.min(100, Number(volInput.value))) / 100;
+        state.audioVolume = v; saveState();
+        Object.values(windows).forEach(w => {
+            if(w.name === 'musicplayer'){
+                const media = w.element.querySelector('audio,video');
+                if(media) try { media.volume = v; } catch(e){}
+            }
+        });
+    });
+    volRow.appendChild(volLabel); volRow.appendChild(volInput); volRow.appendChild(volVal);
+    audioSection.appendChild(volRow);
+    
+    // 検索エンジン設定
+    const searchSection = createSection('検索エンジン');
+    const searchLabel = document.createElement('div'); searchLabel.textContent = '検索URLテンプレート';
+    const searchInput = document.createElement('input'); searchInput.type = 'text'; 
+    searchInput.value = userData.searchEngineUrl || 'https://www.dogpile.com/serp?q=';
+    searchInput.placeholder = '例: https://www.google.com/search?q=';
+    
+    const searchInfo = document.createElement('div');
+    searchInfo.className = 'muted';
+    searchInfo.innerHTML = '検索クエリはURLの末尾に自動で追加されます。テンプレートの末尾は <b>?q=</b> などで終わる必要があります。';
+    
+    const saveSearchBtn = document.createElement('button');
+    saveSearchBtn.textContent = '保存して適用';
+    saveSearchBtn.addEventListener('click', () => {
+        userData.searchEngineUrl = searchInput.value.trim() || 'https://www.dogpile.com/serp?q=';
+        saveState();
+        alert('検索エンジン設定を更新しました。');
+    });
+
+    searchSection.appendChild(searchLabel);
+    searchSection.appendChild(searchInput);
+    searchSection.appendChild(searchInfo);
+    searchSection.appendChild(saveSearchBtn);
+
+    // ビルドバージョン表示
+    const systemSection = createSection('システム');
+    const versionInfo = document.createElement('div');
+    versionInfo.className = 'muted';
+    versionInfo.textContent = `Windweb バージョン: ${BUILD_VERSION}`;
+    systemSection.appendChild(versionInfo);
+  }
+
+  /* ---------- System Boot / Initialization ---------- */
+  function bootSystem() {
+    applyTheme();
+    applyWallpaper();
+    applyCursor(); // カーソルを適用
+    renderDesktopIcons();
+    updateTaskbar();
+    updateStartMenuUser();
+    
+    // 既存のウィンドウを復元
+    const userData = getCurrentUserData();
+    if(userData && userData.windowsMeta) {
+        Object.entries(userData.windowsMeta).forEach(([id, meta]) => {
+            // アプリ名とタイトルを推測
+            let appName = 'unknown';
+            let titleText = 'Unknown App';
+            // ファイルメタデータから復元すべきアプリを特定
+            const fileMeta = userData.desktopFiles.find(f => f.id === id) || 
+                             defaultUserFiles.find(f => f.id === id); // 既存のアプリIDと一致するか確認
+            
+            if (fileMeta) {
+                if (fileMeta.type === 'app') {
+                    appName = fileMeta.app;
+                    titleText = fileMeta.name;
+                } else if (fileMeta.type === 'file' || fileMeta.type === 'text') {
+                    appName = 'notepad';
+                    titleText = fileMeta.name;
+                } else if (fileMeta.type === 'html') {
+                    appName = 'browser';
+                    titleText = fileMeta.name;
+                } else if (fileMeta.type === 'audio' || fileMeta.type === 'video') {
+                    appName = 'musicplayer';
+                    titleText = fileMeta.name;
+                }
+            } else {
+                 // 永続的なアプリ（ブラウザ、設定など）のウィンドウを復元するためのロジックが必要だが、
+                 // 現状のメタデータはファイル/アプリのIDに紐づいているため、このままとする。
+                 // IDがファイルのIDと一致しない場合は復元しない。
+                 return;
+            }
+
+            // メタデータに基づいてウィンドウを作成
+            const winObj = createWindow(id, appName, titleText, { noGlass: appName === 'musicplayer' || appName === 'cmd' || appName === 'tetris' });
+            windows[id] = { id, name:appName, element: winObj.element, minimized:false, isMaximized:!!winObj.meta.isMaximized, prevRect:null, title: titleText, file: fileMeta };
+            
+            // コンテンツのレンダリング
+            if(appName === 'explorer') renderExplorerContent(winObj.content, null);
+            else if(appName === 'notepad') { 
+                const ta = document.createElement('textarea'); ta.spellcheck=false; ta.value=fileMeta?.content || ''; 
+                winObj.content.appendChild(ta); 
+                // 保存ボタンのロジックはopenFileInNotepadを参照
+                const saveBtn = document.createElement('button');
+                saveBtn.textContent = '保存';
+                saveBtn.style.position = 'absolute'; saveBtn.style.bottom = '12px'; saveBtn.style.right = '12px';
+                saveBtn.style.padding = '6px 12px'; saveBtn.style.borderRadius = '6px'; saveBtn.style.border = 'none'; saveBtn.style.cursor = 'pointer';
+                saveBtn.style.background = '#0078d7'; saveBtn.style.color = 'white';
+                saveBtn.addEventListener('click', () => { if(fileMeta) { fileMeta.content = ta.value; saveState(); alert(`${fileMeta.name} を保存しました。`); } });
+                winObj.content.style.paddingBottom = '50px'; 
+                winObj.content.appendChild(saveBtn);
+                
+            }
+            else if(appName === 'browser') renderBrowserContent(winObj.content);
+            else if(appName === 'musicplayer') renderMusicPlayer(winObj.content, fileMeta);
+            else if(appName === 'settings') renderSettingsContent(winObj.content);
+            else if(appName === 'cmd') renderCmdContent(winObj.content, id);
+            else if(appName === 'clock') renderClockContent(winObj.content, id);
+            else if(appName === 'calendar') renderCalendarContent(winObj.content, id);
+            else if(appName === 'tetris') renderTetrisContent(winObj.content, id);
+
+            if(meta.isMaximized) {
+                // 最大化状態の場合は prevRect も復元する必要がある
+                if (meta.left && meta.width) {
+                    windows[id].prevRect = { left: meta.left, top: meta.top, width: meta.width, height: meta.height };
+                }
+            }
+        });
+        // 復元後、メタデータをクリーンアップ
+    }
+
+    const observer = new MutationObserver(()=> {
+      Object.values(windows).forEach(win=>{ if(!win._fileDropSetup){ setupFileDrop(win); win._fileDropSetup = true; } });
+    });
+    observer.observe(desktop, {childList:true});
+  }
+  
+  function initialize() {
+    if (state.currentUser && state.users[state.currentUser]) {
+      signonOverlay.style.display = 'none';
+      bootSystem();
+    } else {
+      signonOverlay.style.display = 'flex';
+      populateUserSelect();
+    }
+    
+    window.addEventListener('resize', () => { if(getCurrentUserData()) renderDesktopIcons() });
+    window.addEventListener('keydown', (e)=> {
+      if(e.key === 'Escape'){ closeStartMenu(); contextMenu.style.display='none'; }
+    });
+    desktop.addEventListener('click', ()=> { contextMenu.style.display='none'; });
+  }
+
+  initialize();
+
+})();
+</script>
+</body>
+</html>
