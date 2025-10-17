@@ -3,7 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<meta property="og:title" content="WindWeb">
+<meta property="og:description" content="WindWebは、ブラウザ上で動作するデスクトップ環境です。アプリケーションの起動、ファイル管理、カスタマイズなど、PCの基本的な操作を体験できます。">
+<meta property="og:image" content="https://os.hosted.click/image.png">
+<meta property="og:url" content="https://os.hosted.click/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WindWeb">
+<link rel="icon" type="image/png" href="https://os.hosted.click/favicon.png" />
 <title>Windweb desktop</title>
 
 <style>
@@ -151,6 +157,17 @@
   .settings-section input[type="file"] { margin: 8px 0; }
   .settings-section input[type="text"] { width: 100%; margin: 8px 0; }
 
+  /* Tetris Styles */
+  #tetris-main-container { display: flex; gap: 20px; align-items: flex-start; height: 100%; }
+  #player-area { display: flex; flex-direction: column; align-items: center; }
+  #tetris-game-area { width: 200px; height: 400px; border: 2px solid #333; background: #222; display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(20, 1fr); margin-bottom: 10px; }
+  #cpu-container { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
+  .cpu-board-wrapper { text-align: center; }
+  .cpu-board { width: 100px; height: 200px; border: 1px solid #555; background: #111; display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(20, 1fr); transform: scale(0.5); transform-origin: top left; }
+  #next-piece-area { width: 80px; height: 80px; border: 1px solid #ccc; background: #eee; margin-bottom: 10px; padding: 5px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; }
+  #next-piece-display { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); width: 60px; height: 60px; }
+  .block { border: 1px solid rgba(0,0,0,0.1); }
+  
   /* --- Dark Mode --- */
   body.dark-mode { background: #1e1e1e; color: var(--text-light); }
   body.dark-mode .glass { background: rgba(30, 30, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -188,6 +205,10 @@
       background: #555; color: var(--text-light); border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;
   }
   body.dark-mode .settings-section input[type="range"] { background: transparent; border: none; }
+
+  /* Tetris Dark Mode */
+  body.dark-mode #next-piece-area { border-color: #555; background: #333; color: var(--text-light); }
+  body.dark-mode .cpu-board { border-color: #555; background: #111; }
 </style>
 </head>
 <body>
@@ -209,11 +230,7 @@
       </div>
 
       <div style="margin-top:10px;color:#cfe0ff;font-size:12px;">※ ユーザー情報は localStorage に保存されます</div>
-      <div class="button-group" style="margin-top:20px;">
-        <button id="backup-btn" class="glass" style="background-color:rgba(53,220,69,0.5);">バックアップ</button>
-        <button id="load-backup-btn" class="glass" style="background-color:rgba(53,69,220,0.5);">ロード</button>
       </div>
-    </div>
   </div>
 
   <div id="desktop" tabindex="0" aria-label="デスクトップ"></div>
@@ -261,11 +278,23 @@
     </button>
     <button class="app-launch" data-app="tetris" role="menuitem">
       <img src="https://cdn-icons-png.flaticon.com/512/1004/1004732.png" alt="" width="22" height="22"/>
-      テトリス
+      ブロックガッチャンコ
     </button>
     <button class="app-launch" data-app="settings" role="menuitem">
       <img src="https://cdn-icons-png.flaticon.com/512/3524/3524659.png" alt="" width="22" height="22"/>
       設定
+    </button>
+    
+    <hr style="border:none;height:1px;background:rgba(255,255,255,0.06);margin:8px 0;">
+    
+    <button id="reboot-btn" class="app-launch" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/483/483344.png" alt="Reboot Icon" width="22" height="22"/>
+      再起動
+    </button>
+    
+    <button id="signout-btn" class="app-launch" role="menuitem">
+      <img src="https://cdn-icons-png.flaticon.com/512/1828/1828479.png" alt="Sign Out Icon" width="22" height="22"/>
+      サインアウト
     </button>
 
     <hr style="border:none;height:1px;background:rgba(255,255,255,0.06);margin:8px 0;">
@@ -291,7 +320,7 @@
 
 <script>
 (() => {
-  const BUILD_VERSION = "2.0.0"; // ビルドバージョンを更新
+  const BUILD_VERSION = "2.1.0"; // ビルドバージョンを更新
 
   /* ---------- LocalStorage Management ---------- */
   function saveState() {
@@ -341,9 +370,11 @@
   const changeWallpaperBtn = document.getElementById('change-wallpaper-btn');
   const uploadWallpaperBtn = document.getElementById('upload-wallpaper-btn');
   const createFileBtn = document.getElementById('create-file-btn');
-  const backupBtn = document.getElementById('backup-btn');
-  const loadBackupBtn = document.getElementById('load-backup-btn');
+  // const backupBtn = document.getElementById('backup-btn'); // 設定画面に移動
+  // const loadBackupBtn = document.getElementById('load-backup-btn'); // 設定画面に移動
   const backupFileInput = document.getElementById('backup-file-input');
+  const rebootBtn = document.getElementById('reboot-btn');
+  const signoutBtn = document.getElementById('signout-btn');
 
   // Sign-on Elements
   const signonOverlay = document.getElementById('signon-overlay');
@@ -467,6 +498,7 @@
       else if(file.type === 'html') img.src = 'https://cdn-icons-png.flaticon.com/512/1006/1006363.png';
       else if(file.type === 'video') img.src = 'https://cdn-icons-png.flaticon.com/512/2930/2930019.png';
       else if(file.type === 'audio') img.src = 'https://cdn-icons-png.flaticon.com/512/727/727245.png';
+      else if(file.type === 'folder') img.src = 'https://cdn-icons-png.flaticon.com/512/715/715676.png'; // フォルダアイコンを追加
       else img.src = 'https://cdn-icons-png.flaticon.com/512/136/136538.png';
       icon.appendChild(img);
 
@@ -532,6 +564,9 @@
   }
   startButton.addEventListener('click', ()=> { if(startMenu.classList.contains('active')) closeStartMenu(); else openStartMenu(); });
   startMenu.querySelectorAll('.app-launch').forEach(btn => btn.addEventListener('click', ()=> { launchApp(btn.dataset.app); closeStartMenu(); }));
+  
+  rebootBtn.addEventListener('click', () => { closeStartMenu(); if(confirm('システムを再起動しますか？')) location.reload(); });
+  signoutBtn.addEventListener('click', () => { closeStartMenu(); if(confirm('サインアウトしますか？')) { state.currentUser = null; saveState(); location.reload(); } });
 
   /* ---------- Window Management ---------- */
   function generateId(){ return 'id_' + Math.random().toString(36).slice(2,10); }
@@ -906,7 +941,7 @@
   }
 
   /* ---------- Command Prompt App ---------- */
-  function renderCmdContent(container){
+  function renderCmdContent(container, id){
     // コンソール風の見た目を強制
     container.style.backgroundColor = 'black';
     container.style.color = '#00ff00';
@@ -944,22 +979,38 @@
     container.appendChild(inputArea);
 
     input.focus();
+    
+    const win = windows[id];
 
     function executeCommand(command) {
         let result = '';
         const parts = command.trim().split(/\s+/);
         const cmd = parts[0].toLowerCase();
-        const args = parts.slice(1).join(' ');
+        const args = command.trim().substring(parts[0].length).trim();
+        const rawArgs = parts.slice(1).filter(a => a);
+        const userData = getCurrentUserData();
 
         switch (cmd) {
             case 'help':
                 result = '利用可能なコマンド:\n' +
                          '  help          - このヘルプメッセージを表示\n' +
                          '  echo [text]   - テキストを表示\n' +
-                         '  clear / cls   - 画面をクリア\n' +
+                         '  cls / clear   - 画面をクリア\n' +
                          '  ls / dir      - デスクトップのファイル一覧を表示\n' +
                          '  open [app]    - アプリを起動 (settings, notepad, browserなど)\n' +
-                         '  version       - バージョン情報を表示';
+                         '  start / run   - open のエイリアス\n' +
+                         '  ver / version - バージョン情報を表示\n' +
+                         '  date          - 現在の日付を表示\n' +
+                         '  time          - 現在の時刻を表示\n' +
+                         '  title [text]  - ウィンドウタイトルを設定\n' +
+                         '  color [fg] [bg] - コンソールの色を設定\n' +
+                         '  md / mkdir [name] - フォルダを作成\n' +
+                         '  rd / rmdir [name] - フォルダを削除 (空のみ)\n' +
+                         '  type [file]   - テキストファイルの内容を表示\n' +
+                         '  ren [old] [new] - ファイル名を変更\n' +
+                         '  del / erase [name] - ファイルを削除\n' +
+                         '  exit          - ウィンドウを閉じる\n' +
+                         '  path          - 環境変数Pathを表示';
                 break;
             case 'echo':
                 result = args;
@@ -970,9 +1021,11 @@
                 return;
             case 'ls':
             case 'dir':
-                result = 'デスクトップファイル一覧:\n' + getCurrentUserData().desktopFiles.map(f => `[${f.type.toUpperCase()}] ${f.name}`).join('\n');
+                result = 'デスクトップファイル一覧:\n' + userData.desktopFiles.map(f => `[${f.type.toUpperCase()}] ${f.name}`).join('\n');
                 break;
             case 'open':
+            case 'start':
+            case 'run':
                 const appName = args.toLowerCase();
                 const validApps = ['explorer', 'notepad', 'browser', 'musicplayer', 'settings', 'cmd', 'clock', 'calendar', 'tetris'];
                 if (validApps.includes(appName)) {
@@ -982,8 +1035,85 @@
                     result = `エラー: アプリ '${appName}' は見つかりません。 (利用可能: ${validApps.join(', ')})`;
                 }
                 break;
+            case 'ver':
             case 'version':
                 result = `Windweb Command Prompt [Version ${BUILD_VERSION}]`;
+                break;
+            case 'date':
+                result = `現在の日付: ${new Date().toLocaleDateString('ja-JP', {year: 'numeric', month: 'long', day: 'numeric'})}`;
+                break;
+            case 'time':
+                result = `現在の時刻: ${new Date().toLocaleTimeString('ja-JP')}`;
+                break;
+            case 'title':
+                const titleEl = win.element.querySelector('.titlebar .title');
+                const newTitle = args || 'コマンドプロンプト';
+                titleEl.textContent = newTitle;
+                win.title = newTitle;
+                updateTaskbar();
+                result = `ウィンドウタイトルを「${newTitle}」に設定しました。`;
+                break;
+            case 'color':
+                const content = container.parentElement.querySelector('.content');
+                if (rawArgs.length > 0) content.style.color = rawArgs[0];
+                if (rawArgs.length > 1) content.style.backgroundColor = rawArgs[1];
+                result = `色の変更を試みました (前景:${rawArgs[0] || 'none'}, 背景:${rawArgs[1] || 'none'})。`;
+                break;
+            case 'md':
+            case 'mkdir':
+                const folderName = args.trim();
+                if (!folderName) result = 'エラー: 作成するディレクトリ名を指定してください。';
+                else {
+                    addFileToDesktop({ id: generateId(), name: folderName, type: 'folder', children: [], pos: null });
+                    result = `ディレクトリ ${folderName} を作成しました。`;
+                }
+                break;
+            case 'rd':
+            case 'rmdir':
+                const dirToRemove = args.trim();
+                const initialLength = userData.desktopFiles.length;
+                if (!dirToRemove) result = 'エラー: 削除するディレクトリ名を指定してください。';
+                else {
+                    userData.desktopFiles = userData.desktopFiles.filter(f => f.name !== dirToRemove || f.type !== 'folder');
+                    if (userData.desktopFiles.length < initialLength) {
+                        renderDesktopIcons(); saveState(); result = `ディレクトリ ${dirToRemove} を削除しました。`;
+                    } else result = `エラー: ディレクトリ ${dirToRemove} は見つかりませんでした。`;
+                }
+                break;
+            case 'type':
+                const fileName = args.trim();
+                const fileToRead = userData.desktopFiles.find(f => f.name === fileName && (f.type === 'file' || f.type === 'text' || f.type === 'html'));
+                if (fileToRead) result = `${fileName} の内容:\n${fileToRead.content || '[ファイルの内容が空か、表示できない形式です]'}`;
+                else result = `エラー: ファイル ${fileName} は見つかりませんでした。`;
+                break;
+            case 'ren':
+            case 'rename':
+                const [oldName, newName] = rawArgs;
+                if (!oldName || !newName) result = 'エラー: 古いファイル名と新しいファイル名を指定してください。';
+                else {
+                    const fileToRename = userData.desktopFiles.find(f => f.name === oldName);
+                    if (fileToRename) {
+                        fileToRename.name = newName; renderDesktopIcons(); saveState(); result = `${oldName} を ${newName} にリネームしました。`;
+                    } else result = `エラー: ファイル ${oldName} は見つかりませんでした。`;
+                }
+                break;
+            case 'del':
+            case 'erase':
+                const fileToDelete = args.trim();
+                const initialLen = userData.desktopFiles.length;
+                if (!fileToDelete) result = 'エラー: 削除するファイル名を指定してください。';
+                else {
+                    userData.desktopFiles = userData.desktopFiles.filter(f => f.name !== fileToDelete);
+                    if (userData.desktopFiles.length < initialLen) {
+                        renderDesktopIcons(); saveState(); result = `ファイル ${fileToDelete} を削除しました。`;
+                    } else result = `エラー: ファイル ${fileToDelete} は見つかりませんでした。`;
+                }
+                break;
+            case 'exit':
+                closeWindow(win.id);
+                return;
+            case 'path':
+                result = 'Path: C:\\Windweb\\System32;C:\\Windweb\\Apps';
                 break;
             case '':
                 break;
@@ -1273,279 +1403,305 @@
     renderTodoList();
   }
 
-  /* ---------- Tetris Game App ---------- */
-  function renderTetrisContent(container){
-      container.style.display = 'flex';
-      container.style.flexDirection = 'column';
-      container.style.alignItems = 'center';
-      container.style.justifyContent = 'flex-start';
-      container.style.height = '100%';
-      container.style.userSelect = 'none';
+/* ---------- BlockGachanko Game App ---------- */
+function renderTetrisContent(container) {
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.alignItems = 'center';
+    container.style.justifyContent = 'center';
+    container.style.height = '100%';
+    container.style.userSelect = 'none';
+    container.style.padding = '10px';
 
-      container.innerHTML = '<h3>テトリス風ゲーム</h3><div id="tetris-game-area" style="width:200px; height:400px; border:2px solid #333; background:#222; display:grid; grid-template-columns:repeat(10, 1fr); grid-template-rows:repeat(20, 1fr); margin-bottom:10px;"></div><div id="score-display">スコア: 0</div><button id="start-tetris">ゲーム開始 (Space)</button><div class="muted" style="margin-top:10px;">操作: ← → ↓ 回転: ↑/Space</div>';
+    container.innerHTML = `
+        <h3 style="margin-top:0;">ブロックガッチャンコ</h3>
+        <div id="tetris-ui" style="display:flex; gap:20px; align-items:flex-start;">
+            <div id="tetris-info" style="display:flex; flex-direction:column; align-items:center;">
+                <div id="next-piece-area" style="text-align:center; margin-bottom:10px;">
+                    <div style="font-size:14px; margin-bottom:5px;">Next</div>
+                    <div id="next-piece-display" 
+                         style="width:80px; height:80px; border:1px solid #555; background:#111; display:grid; place-items:center;">
+                    </div>
+                </div>
+                <div id="score-display" style="margin:5px 0; font-weight:bold;">スコア: 0</div>
+                <button id="start-tetris" style="margin-top:10px; padding:5px 10px;">ゲーム開始 (Space)</button>
+            </div>
+            <div id="tetris-game-area" 
+                 style="display:grid; grid-template-columns:repeat(10, 20px); grid-template-rows:repeat(20, 20px);
+                        gap:1px; background:#222; border:2px solid #444;">
+            </div>
+        </div>
+        <div class="muted" style="margin-top:10px; font-size:12px; opacity:0.8;">
+            操作: ← → ↓ ／ 回転: ↑またはSpace
+        </div>
+    `;
 
-      const gameArea = container.querySelector('#tetris-game-area');
-      const scoreDisplay = container.querySelector('#score-display');
-      const startBtn = container.querySelector('#start-tetris');
-      
-      // Game variables
-      const ROWS = 20;
-      const COLS = 10;
-      const BLOCK_SIZE = 20; // in pixels
-      let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-      let currentPiece = null;
-      let pieceX = 0;
-      let pieceY = 0;
-      let score = 0;
-      let gameInterval = null;
-      let isGameOver = false;
+    const gameArea = container.querySelector('#tetris-game-area');
+    const scoreDisplay = container.querySelector('#score-display');
+    const startBtn = container.querySelector('#start-tetris');
+    const nextPieceDisplay = container.querySelector('#next-piece-display');
 
-      // Tetrominoes (Simplified)
-      const SHAPES = [
-          [[1, 1], [1, 1]], // O
-          [[0, 1, 0], [1, 1, 1], [0, 0, 0]], // T
-          [[1, 1, 0], [0, 1, 1], [0, 0, 0]], // S
-          [[0, 1, 1], [1, 1, 0], [0, 0, 0]], // Z
-          [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], // I
-          [[1, 0, 0], [1, 1, 1], [0, 0, 0]], // J
-          [[0, 0, 1], [1, 1, 1], [0, 0, 0]] // L
-      ];
-      const COLORS = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#00FFFF', '#FF7F00', '#800080']; // R, G, B, Y, C, O, P
-      
-      // --- Rendering ---
-      function drawBoard() {
-          gameArea.innerHTML = '';
-          for (let r = 0; r < ROWS; r++) {
-              for (let c = 0; c < COLS; c++) {
-                  const cell = document.createElement('div');
-                  cell.style.width = `${BLOCK_SIZE}px`;
-                  cell.style.height = `${BLOCK_SIZE}px`;
-                  cell.style.border = '1px solid rgba(0,0,0,0.1)';
-                  
-                  let colorIndex = board[r][c];
-                  
-                  // Draw fixed blocks
-                  if (colorIndex > 0) {
-                      cell.style.backgroundColor = COLORS[colorIndex - 1];
-                  } else {
-                      cell.style.backgroundColor = '#222';
-                  }
-                  
-                  // Draw current piece (overlayed logic is simplified in DOM grid)
-                  if (currentPiece) {
-                      const pieceMatrix = currentPiece.matrix;
-                      const pieceColor = COLORS[currentPiece.colorIndex];
-                      
-                      for (let py = 0; py < pieceMatrix.length; py++) {
-                          for (let px = 0; px < pieceMatrix[py].length; px++) {
-                              if (pieceMatrix[py][px] === 1) {
-                                  if (r === pieceY + py && c === pieceX + px) {
-                                      cell.style.backgroundColor = pieceColor;
-                                  }
-                              }
-                          }
-                      }
-                  }
-                  
-                  gameArea.appendChild(cell);
-              }
-          }
-          scoreDisplay.textContent = `スコア: ${score}`;
-      }
+    // Game variables
+    const ROWS = 20;
+    const COLS = 10;
+    let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+    let currentPiece = null;
+    let nextPiece = null;
+    let pieceX = 0;
+    let pieceY = 0;
+    let score = 0;
+    let gameInterval = null;
+    let isGameOver = false;
 
-      // --- Piece Logic ---
-      function createPiece() {
-          const typeIndex = Math.floor(Math.random() * SHAPES.length);
-          return {
-              matrix: SHAPES[typeIndex],
-              colorIndex: typeIndex
-          };
-      }
-      
-      function newPiece() {
-          currentPiece = createPiece();
-          pieceX = Math.floor(COLS / 2) - Math.floor(currentPiece.matrix[0].length / 2);
-          pieceY = 0;
-          
-          if (checkCollision(0, 0)) {
-              isGameOver = true;
-              clearInterval(gameInterval);
-              document.removeEventListener('keydown', handleControls);
-              alert(`ゲームオーバー! スコア: ${score}`);
-              startBtn.disabled = false;
-          }
-      }
-      
-      function checkCollision(dx, dy, piece=currentPiece.matrix) {
-          for (let y = 0; y < piece.length; y++) {
-              for (let x = 0; x < piece[y].length; x++) {
-                  if (piece[y][x] === 1) {
-                      const newY = pieceY + y + dy;
-                      const newX = pieceX + x + dx;
-                      
-                      // Check horizontal boundaries
-                      if (newX < 0 || newX >= COLS) {
-                          return true;
-                      }
-                      // Check floor
-                      if (newY >= ROWS) {
-                          return true;
-                      }
-                      // Check occupied cells
-                      if (newY >= 0 && board[newY][newX] !== 0) {
-                          return true;
-                      }
-                  }
-              }
-          }
-          return false;
-      }
-      
-      function mergePiece() {
-          for (let y = 0; y < currentPiece.matrix.length; y++) {
-              for (let x = 0; x < currentPiece.matrix[y].length; x++) {
-                  if (currentPiece.matrix[y][x] === 1) {
-                      const targetY = pieceY + y;
-                      const targetX = pieceX + x;
-                      if (targetY >= 0 && targetY < ROWS && targetX >= 0 && targetX < COLS) {
-                           board[targetY][targetX] = currentPiece.colorIndex + 1;
-                      }
-                  }
-              }
-          }
-          currentPiece = null;
-          checkLines();
-      }
-      
-      function checkLines() {
-          let linesCleared = 0;
-          for (let r = ROWS - 1; r >= 0; r--) {
-              if (board[r].every(cell => cell !== 0)) {
-                  // Clear line
-                  board.splice(r, 1);
-                  board.unshift(Array(COLS).fill(0)); // Add empty line to the top
-                  linesCleared++;
-                  r++; // Recheck the new line at this row index
-              }
-          }
-          
-          if (linesCleared > 0) {
-              score += [0, 10, 30, 50, 80][linesCleared] || 100; // Scoring system
-          }
-      }
-      
-      function rotatePiece(matrix) {
-          const N = matrix.length;
-          const M = matrix[0].length;
-          const newMatrix = Array.from({ length: M }, () => Array(N).fill(0));
-          
-          for (let y = 0; y < N; y++) {
-              for (let x = 0; x < M; x++) {
-                  newMatrix[x][N - 1 - y] = matrix[y][x];
-              }
-          }
-          return newMatrix;
-      }
-      
-      function handleControls(e) {
-          if (isGameOver || !currentPiece || !container.closest('.window')) return;
-          
-          // Only handle controls if the tetris window is the focused one (heuristic)
-          if (container.closest('.window').id !== focusedWindowId) return;
+    // Tetrominoes
+    const SHAPES = [
+        [[1, 1], [1, 1]], // O
+        [[0, 1, 0], [1, 1, 1], [0, 0, 0]], // T
+        [[1, 1, 0], [0, 1, 1], [0, 0, 0]], // S
+        [[0, 1, 1], [1, 1, 0], [0, 0, 0]], // Z
+        [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], // I
+        [[1, 0, 0], [1, 1, 1], [0, 0, 0]], // J
+        [[0, 0, 1], [1, 1, 1], [0, 0, 0]]  // L
+    ];
+    const COLORS = ['#FFD700', '#FF4081', '#4CAF50', '#03A9F4', '#00BCD4', '#FF9800', '#9C27B0'];
 
-          let moved = true;
-          let newPieceMatrix = currentPiece.matrix;
-          let dx = 0, dy = 0;
+    // --- Rendering ---
+    function drawBoard() {
+        gameArea.innerHTML = '';
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'block';
+                cell.style.width = '20px';
+                cell.style.height = '20px';
+                cell.style.backgroundColor = '#111';
 
-          switch (e.key) {
-              case 'ArrowLeft': dx = -1; break;
-              case 'ArrowRight': dx = 1; break;
-              case 'ArrowDown': dy = 1; break;
-              case 'ArrowUp': 
-              case ' ': // Space for rotation
-                  newPieceMatrix = rotatePiece(currentPiece.matrix);
-                  if (!checkCollision(0, 0, newPieceMatrix)) {
-                      currentPiece.matrix = newPieceMatrix;
-                  } else {
-                      // Try simple wall kicks
-                      const kicks = [0, -1, 1, -2, 2];
-                      for (const kick of kicks) {
-                          if (!checkCollision(kick, 0, newPieceMatrix)) {
-                              currentPiece.matrix = newPieceMatrix;
-                              pieceX += kick;
-                              break;
-                          }
-                      }
-                  }
-                  moved = false;
-                  break;
-              default: moved = false;
-          }
+                if (board[r][c] > 0) {
+                    cell.style.backgroundColor = COLORS[board[r][c] - 1];
+                }
 
-          if (moved) {
-              if (!checkCollision(dx, dy)) {
-                  pieceX += dx;
-                  pieceY += dy;
-              } else if (dy === 1) {
-                  mergePiece();
-                  newPiece();
-              }
-          }
-          
-          drawBoard();
-          e.preventDefault(); // Prevent scrolling
-      }
-      
-      // --- Game Loop ---
-      function gameLoop() {
-          if (isGameOver || !currentPiece) return;
+                // Current falling piece
+                if (currentPiece) {
+                    const matrix = currentPiece.matrix;
+                    for (let py = 0; py < matrix.length; py++) {
+                        for (let px = 0; px < matrix[py].length; px++) {
+                            if (matrix[py][px] === 1) {
+                                if (r === pieceY + py && c === pieceX + px) {
+                                    cell.style.backgroundColor = COLORS[currentPiece.colorIndex];
+                                }
+                            }
+                        }
+                    }
+                }
 
-          if (checkCollision(0, 1)) {
-              mergePiece();
-              newPiece();
-          } else {
-              pieceY++;
-          }
+                gameArea.appendChild(cell);
+            }
+        }
+        scoreDisplay.textContent = `スコア: ${score}`;
+    }
 
-          drawBoard();
-      }
-      
-      function startGame() {
-          if (gameInterval) clearInterval(gameInterval);
-          
-          board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-          score = 0;
-          isGameOver = false;
-          currentPiece = null;
-          newPiece();
-          drawBoard();
-          
-          gameInterval = setInterval(gameLoop, 1000); // 1秒ごとに落下
-          startBtn.disabled = true;
+    function drawNextPiece() {
+        nextPieceDisplay.innerHTML = '';
+        if (!nextPiece) return;
 
-          // Add event listener globally for controls
-          document.addEventListener('keydown', handleControls);
-      }
-      
-      // Clear interval and event listener when the window is closed
-      const win = container.closest('.window');
-      if (win) {
-          const closeBtn = win.querySelector('.titlebar button[title="閉じる"]');
-          const cleanup = () => {
-              clearInterval(gameInterval);
-              document.removeEventListener('keydown', handleControls);
-              startBtn.disabled = false;
-          };
-          closeBtn.addEventListener('click', cleanup, { once: true });
-          
-          // 最小化/最大化時にも一時停止/再開したい場合はロジックを追加する必要がありますが、ここでは省略
-      }
+        const grid = document.createElement('div');
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+        grid.style.gridTemplateRows = 'repeat(4, 1fr)';
+        grid.style.width = '60px';
+        grid.style.height = '60px';
+        grid.style.background = '#111';
+        grid.style.gap = '1px';
 
-      startBtn.addEventListener('click', startGame);
-      
-      // Initial draw
-      drawBoard();
-  }
+        const p = nextPiece;
+        const offsetX = Math.floor((4 - p.matrix[0].length) / 2);
+        const offsetY = Math.floor((4 - p.matrix.length) / 2);
+
+        for (let y = 0; y < 4; y++) {
+            for (let x = 0; x < 4; x++) {
+                const cell = document.createElement('div');
+                cell.style.width = '100%';
+                cell.style.height = '100%';
+                cell.style.background = '#222';
+
+                if (p.matrix[y - offsetY] && p.matrix[y - offsetY][x - offsetX] === 1) {
+                    cell.style.background = COLORS[p.colorIndex];
+                }
+
+                grid.appendChild(cell);
+            }
+        }
+
+        nextPieceDisplay.appendChild(grid);
+    }
+
+    // --- Piece Logic ---
+    function createPiece() {
+        const typeIndex = Math.floor(Math.random() * SHAPES.length);
+        return { matrix: SHAPES[typeIndex], colorIndex: typeIndex };
+    }
+
+    function newPiece() {
+        if (!nextPiece) nextPiece = createPiece();
+        currentPiece = nextPiece;
+        nextPiece = createPiece();
+
+        pieceX = Math.floor(COLS / 2) - Math.floor(currentPiece.matrix[0].length / 2);
+        pieceY = 0;
+
+        if (checkCollision(0, 0, currentPiece.matrix, pieceX, pieceY)) {
+            isGameOver = true;
+            clearInterval(gameInterval);
+            document.removeEventListener('keydown', handleControls);
+            alert(`ゲームオーバー! スコア: ${score}`);
+            startBtn.disabled = false;
+        }
+    }
+
+    function checkCollision(dx, dy, matrix, x, y) {
+        for (let py = 0; py < matrix.length; py++) {
+            for (let px = 0; px < matrix[py].length; px++) {
+                if (matrix[py][px] === 1) {
+                    const newY = y + py + dy;
+                    const newX = x + px + dx;
+
+                    if (newX < 0 || newX >= COLS || newY >= ROWS) return true;
+                    if (newY >= 0 && board[newY][newX] !== 0) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function mergePiece() {
+        const matrix = currentPiece.matrix;
+        for (let y = 0; y < matrix.length; y++) {
+            for (let x = 0; x < matrix[y].length; x++) {
+                if (matrix[y][x] === 1) {
+                    const targetY = pieceY + y;
+                    const targetX = pieceX + x;
+                    if (targetY >= 0 && targetY < ROWS && targetX >= 0 && targetX < COLS) {
+                        board[targetY][targetX] = currentPiece.colorIndex + 1;
+                    }
+                }
+            }
+        }
+        return checkLines();
+    }
+
+    function checkLines() {
+        let lines = 0;
+        for (let r = ROWS - 1; r >= 0; r--) {
+            if (board[r].every(cell => cell !== 0)) {
+                board.splice(r, 1);
+                board.unshift(Array(COLS).fill(0));
+                lines++;
+                r++;
+            }
+        }
+        return lines;
+    }
+
+    function rotatePiece(matrix) {
+        const N = matrix.length;
+        const M = matrix[0].length;
+        const newMatrix = Array.from({ length: M }, () => Array(N).fill(0));
+        for (let y = 0; y < N; y++) {
+            for (let x = 0; x < M; x++) {
+                newMatrix[x][N - 1 - y] = matrix[y][x];
+            }
+        }
+        return newMatrix;
+    }
+
+    // --- Controls ---
+    function handleControls(e) {
+        if (isGameOver || !currentPiece) return;
+
+        let dx = 0, dy = 0;
+        let newMatrix = currentPiece.matrix;
+
+        switch (e.key) {
+            case 'ArrowLeft': dx = -1; break;
+            case 'ArrowRight': dx = 1; break;
+            case 'ArrowDown': dy = 1; break;
+            case 'ArrowUp':
+            case ' ':
+                newMatrix = rotatePiece(currentPiece.matrix);
+                if (!checkCollision(0, 0, newMatrix, pieceX, pieceY)) {
+                    currentPiece.matrix = newMatrix;
+                }
+                drawBoard();
+                drawNextPiece();
+                return;
+        }
+
+        if (!checkCollision(dx, dy, currentPiece.matrix, pieceX, pieceY)) {
+            pieceX += dx;
+            pieceY += dy;
+        } else if (dy === 1) {
+            const lines = mergePiece();
+            score += lines * 10;
+            newPiece();
+        }
+
+        drawBoard();
+        drawNextPiece();
+    }
+
+    // --- Game Loop ---
+    function gameLoop() {
+        if (isGameOver || !currentPiece) return;
+
+        if (checkCollision(0, 1, currentPiece.matrix, pieceX, pieceY)) {
+            const lines = mergePiece();
+            score += lines * 10;
+            newPiece();
+        } else {
+            pieceY++;
+        }
+
+        drawBoard();
+        drawNextPiece();
+    }
+
+    function startGame() {
+        clearInterval(gameInterval);
+        board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+        score = 0;
+        isGameOver = false;
+        currentPiece = null;
+        nextPiece = null;
+
+        nextPiece = createPiece();
+        newPiece();
+
+        drawBoard();
+        drawNextPiece();
+
+        gameInterval = setInterval(gameLoop, 800);
+        startBtn.disabled = true;
+        document.addEventListener('keydown', handleControls);
+    }
+
+    // Cleanup on close
+    const win = container.closest('.window');
+    if (win) {
+        const closeBtn = win.querySelector('.titlebar button[title="閉じる"]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                clearInterval(gameInterval);
+                document.removeEventListener('keydown', handleControls);
+                startBtn.disabled = false;
+            }, { once: true });
+        }
+    }
+
+    startBtn.addEventListener('click', startGame);
+    drawBoard();
+    drawNextPiece();
+}
+
 
   /* ---------- File Uploads and Drag & Drop ---------- */
   function addFileToDesktop(fileObject) {
@@ -1675,7 +1831,7 @@
     }
   });
 
-  /* ---------- User Authentication / Sign-on / Backup/Load ---------- */
+  /* ---------- User Authentication / Sign-on / Backup/Load (Moved to Settings) ---------- */
   function populateUserSelect() {
       userSelect.innerHTML = '';
       Object.keys(state.users).forEach(username => {
@@ -1745,38 +1901,6 @@
           saveState();
           alert(`ユーザー「${selectedUser}」を削除しました。`);
       }
-  });
-  
-  backupBtn.addEventListener('click', () => {
-    downloadJson(state, `windweb_backup_${new Date().toISOString().slice(0,10)}.json`);
-    alert('バックアップファイルを作成しました。');
-  });
-
-  loadBackupBtn.addEventListener('click', () => backupFileInput.click());
-  backupFileInput.addEventListener('change', e => {
-      const f = e.target.files[0];
-      if (!f || f.type !== 'application/json') {
-          alert('JSONファイルを選択してください。');
-          return;
-      }
-      const reader = new FileReader();
-      reader.onload = ev => {
-          try {
-              const loadedState = JSON.parse(ev.target.result);
-              if (loadedState && loadedState.users) {
-                  state = loadedState;
-                  state.currentUser = null; // 強制的にログアウト状態に戻す
-                  saveState();
-                  alert('バックアップをロードしました。再サインインしてください。');
-                  location.reload();
-              } else {
-                  throw new Error('無効なバックアップファイル形式です。');
-              }
-          } catch(err) {
-              alert('バックアップファイルの解析に失敗しました: ' + err.message);
-          }
-      };
-      reader.readAsText(f);
   });
 
   /* ---------- Music Player ---------- */
@@ -1962,6 +2086,49 @@
         }
     });
     accountSection.appendChild(logoutBtn);
+    
+    // バックアップ機能の追加
+    const backupSection = createSection('バックアップと復元');
+    const backupBtn = document.createElement('button');
+    backupBtn.textContent = 'バックアップを作成';
+    backupBtn.addEventListener('click', () => {
+        downloadJson(state, `windweb_backup_${new Date().toISOString().slice(0,10)}.json`);
+        alert('バックアップファイルを作成しました。');
+    });
+    
+    const loadBackupBtn = document.createElement('button');
+    loadBackupBtn.textContent = 'バックアップをロード';
+    loadBackupBtn.addEventListener('click', () => backupFileInput.click());
+    
+    backupSection.appendChild(backupBtn);
+    backupSection.appendChild(loadBackupBtn);
+    
+    backupFileInput.addEventListener('change', e => {
+        const f = e.target.files[0];
+        if (!f || f.type !== 'application/json') {
+            alert('JSONファイルを選択してください。');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = ev => {
+            try {
+                const loadedState = JSON.parse(ev.target.result);
+                if (loadedState && loadedState.users) {
+                    state = loadedState;
+                    state.currentUser = null; // 強制的にログアウト状態に戻す
+                    saveState();
+                    alert('バックアップをロードしました。再サインインしてください。');
+                    location.reload();
+                } else {
+                    throw new Error('無効なバックアップファイル形式です。');
+                }
+            } catch(err) {
+                alert('バックアップファイルの解析に失敗しました: ' + err.message);
+            }
+        };
+        reader.readAsText(f);
+    });
+    
 
     const audioSection = createSection('オーディオ');
     const volRow = document.createElement('div'); volRow.style.display='flex'; volRow.style.alignItems='center'; volRow.style.gap='8px';
@@ -2091,7 +2258,7 @@
                 }
             }
         });
-        // 復元後、メタデータをクリーンアップ
+        // 復元後、メタデータをクリーンアップ（ここではしないでおく）
     }
 
     const observer = new MutationObserver(()=> {
